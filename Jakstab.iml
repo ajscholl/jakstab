@@ -46,5 +46,8 @@
         <SOURCES />
       </library>
     </orderEntry>
+    <orderEntry type="library" name="antlr" level="project" />
+    <orderEntry type="library" name="bdd" level="project" />
+    <orderEntry type="library" name="google-collect-1.0" level="project" />
   </component>
 </module>
