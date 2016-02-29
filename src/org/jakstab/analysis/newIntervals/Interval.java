@@ -1,5 +1,6 @@
 package org.jakstab.analysis.newIntervals;
 
+import org.jakstab.Options;
 import org.jakstab.analysis.AbstractState;
 import org.jakstab.analysis.AbstractValue;
 import org.jakstab.analysis.LatticeElement;
@@ -70,7 +71,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         if (kind != t.kind) {
 			return kind.compareTo(t.kind);
         } else if (kind == IntervalKind.INTERVAL) {
-			return (minBits == t.minBits) ? Long.compare(maxBits, t.maxBits) : Long.compare(minBits, t.minBits);
+			return (minBits == t.minBits) ? Long.compare(maxBits, t.maxBits) : Long.compare(minBits, t.minBits); // FIXME does this work with cut off bit patterns?
 		} else {
             return 0;
         }
@@ -95,7 +96,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	@Override
 	public Set<RTLNumber> concretize() {
 		if (isBot()) {
-			return Collections.EMPTY_SET;
+			return Collections.emptySet();
 		}
 		if (isTop()) {
 			return RTLNumber.ALL_NUMBERS;
@@ -335,6 +336,89 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         return bigger(f, g);
     }
 
+	public Interval[] intersection(Interval t) {
+		checkCompatible(t);
+		if (isBot() || t.isBot()) {
+			return new Interval[] {};
+		}
+		if (equals(t) || isTop()) {
+			return new Interval[] {t};
+		}
+		if (t.isTop()) {
+			return new Interval[] {this};
+		}
+		boolean minInT = t.isElement(minBits);
+		boolean maxInT = t.isElement(maxBits);
+		boolean tMinInThis = isElement(t.minBits);
+		boolean tMaxInThis = isElement((t.maxBits));
+		if (minInT && maxInT && tMinInThis && tMaxInThis) {
+			return new Interval[] {mkSomeInterval(minBits, t.maxBits, bits), mkSomeInterval(maxBits, t.minBits, bits)};
+		}
+		if (minInT && maxInT) {
+			return new Interval[] {this};
+		}
+		if (tMinInThis && tMaxInThis) {
+			return new Interval[] {t};
+		}
+		if (minInT && tMaxInThis) {
+			return new Interval[] {mkSomeInterval(minBits, t.maxBits, bits)};
+		}
+		if (maxInT && tMinInThis) {
+			return new Interval[] {mkSomeInterval(maxBits, t.minBits, bits)};
+		}
+		return new Interval[] {};
+	}
+
+	private Interval getNP() {
+		assert bits != Bits.BIT0;
+		long max = 1L << (bits.getBits() - 1L);
+		long min = max - 1L;
+		return mkSomeInterval(min, max, bits);
+	}
+
+	private Interval getSP() {
+		assert bits != Bits.BIT0;
+		return mkSomeInterval(bits.getMask(), 0, bits);
+	}
+
+	/**
+	 * Split an interval at the north pole.
+	 * @return All sub-intervals.
+	 */
+	private Interval[] nsplit() {
+		assert bits != Bits.BIT0;
+		if (isBot()) {
+			return new Interval[] {};
+		}
+		long tmp = 1L << (bits.getBits() - 1L);
+		if (isTop()) {
+			return new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
+		}
+		if (!getNP().isSubsetOf(this)) {
+			return new Interval[] {this};
+		}
+		return new Interval[] {mkSomeInterval(minBits, tmp - 1L, bits), mkSomeInterval(tmp, maxBits, bits)};
+	}
+
+	/**
+	 * Split an interval at the south pole.
+	 * @return All sub-intervals.
+	 */
+	private Interval[] ssplit() {
+		assert bits != Bits.BIT0;
+		if (isBot()) {
+			return new Interval[] {};
+		}
+		long tmp = 1L << (bits.getBits() - 1L);
+		if (isTop()) {
+			return new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
+		}
+		if (!getSP().isSubsetOf(this)) {
+			return new Interval[] {this};
+		}
+		return new Interval[] {mkSomeInterval(minBits, tmp - 1L, bits), mkSomeInterval(tmp, maxBits, bits)};
+	}
+
 	public Interval widen(Interval other) {
 		checkCompatible(other);
 		// TODO: this is really weak
@@ -436,8 +520,8 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
 
-	private Interval abstractEval(RTLExpression e) {
-		final Bits bits = Bits.fromInt(e.getBitWidth());
+	public static Interval abstractEval(RTLExpression e) {
+		final Bits bits = Bits.fromInt(e.getBitWidth()); // TODO at least BitRanges explode sometimes...
 		ExpressionVisitor<Interval> visitor = new ExpressionVisitor<Interval>() {
 
 			@Override
@@ -447,7 +531,19 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 			@Override
 			public Interval visit(RTLConditionalExpression e) {
-				return mkTopInterval(bits); //TODO
+				Interval cond = abstractEval(e.getCondition());
+				assert cond.bits == Bits.BIT1 : "Condition has to be a boolean";
+				if (cond.minBits == cond.maxBits) {
+					if (cond.minBits != 0) {
+						assert cond.minBits == 1;
+						return abstractEval(e.getTrueExpression());
+					}
+					return abstractEval(e.getFalseExpression());
+				} else {
+					Interval t = abstractEval(e.getTrueExpression());
+					Interval f = abstractEval(e.getFalseExpression());
+					return t.join(f);
+				}
 			}
 
 			@Override
@@ -457,22 +553,106 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 			@Override
 			public Interval visit(RTLNondet e) {
-				return mkTopInterval(bits); //TODO
+				// non-deterministic value, i.e. TOP
+				return mkTopInterval(bits);
 			}
 
 			@Override
 			public Interval visit(RTLNumber e) {
+				// a single number, simple
 				return mkSomeInterval(e.longValue(), e.longValue(), bits);
 			}
 
 			@Override
 			public Interval visit(RTLOperation e) {
-				return mkTopInterval(bits); //TODO
+				RTLExpression[] args = e.getOperands();
+				Interval e0, e1;
+				switch (e.getOperator()) {
+					case UNKNOWN:
+						assert !Options.failFast.getValue() : "Evaluated unknown operator";
+						return mkTopInterval(bits);
+
+					// Operators for changing bit-width
+					case CAST:
+					case SIGN_EXTEND:
+					case ZERO_FILL:
+					case FSIZE:
+						assert args.length == 1;
+						e0 = abstractEval(args[0]);
+						return mkTopInterval(bits); //TODO
+
+					// Comparison
+					case EQUAL:
+					case LESS:
+					case LESS_OR_EQUAL:
+					case UNSIGNED_LESS:
+					case UNSIGNED_LESS_OR_EQUAL:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return mkTopInterval(bits); //TODO
+
+					// Unary operators
+					case NOT:
+						assert args.length == 1;
+						e0 = abstractEval(args[0]);
+						return mkTopInterval(bits); //TODO
+					case NEG:
+						assert args.length == 1;
+						return mkSomeInterval(0, 0, bits).subInterval(abstractEval(args[0]));
+
+					// Associative commutative bitwise arithmetic operators
+					case AND:
+					case OR:
+					case XOR:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return mkTopInterval(bits); //TODO
+					case PLUS:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return e0.addInterval(e1);
+					case MUL:
+					case FMUL:
+					case FDIV:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return mkTopInterval(bits); //TODO
+
+					// Other bitwise arithmetic operators
+					case DIV:
+					case MOD:
+					case POWER_OF:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return mkTopInterval(bits); //TODO
+
+					// Bitwise shift operations
+					case SHR:
+					case SAR: /* Shift right with sign extension */
+					case SHL:
+					case ROL:
+					case ROR:
+					case ROLC:
+					case RORC: /* Rotate with carry */
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return mkTopInterval(bits); //TODO
+					default:
+						assert false : "Unknown operation";
+						return null;
+				}
 			}
 
 			@Override
 			public Interval visit(RTLSpecialExpression e) {
-				return mkTopInterval(bits); //TODO
+				assert !Options.failFast.getValue() : "Evaluated special expression";
+				return mkTopInterval(bits);
 			}
 
 			@Override
