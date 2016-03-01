@@ -616,6 +616,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			}
 		}
 		logger.debug(this + " `widen` " + t + " = " + result);
+		assert lessOrEqual(result) && t.lessOrEqual(result) : "Widen returned something smaller than one of the arguments";
 		return result;
 	}
 

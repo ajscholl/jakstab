@@ -21,7 +21,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
         p.setExplicit(true);
     }
 
-	public static JOption<Integer> threshold = JOption.create("interval-threshold", "k", 20, "Sets the threshold used in merge and prec.");
+	public static JOption<Integer> threshold = JOption.create("interval-threshold", "k", 3, "Sets the threshold used in merge and prec.");
 
     @SuppressWarnings("unused")
     private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
@@ -51,7 +51,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
         if(prec.getCount() >= threshold.getValue()) {
             //widen
             logger.debug("Will widen now");
-            Interval result = (Interval) ((Interval) s2).widen((Interval) s1).join(s1).join(s2);
+            Interval result = ((Interval) s2).widen((Interval) s1).join(s1).join(s2); // TODO can we remove the joins? the assert in widen should ensure this
             logger.debug("s1: " + s1);
             logger.debug("s2: " + s2);
             logger.debug("result: " + result);
@@ -75,9 +75,9 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
     }
 
     @Override
-    public Pair<AbstractState, Precision> prec(AbstractState s,
-                                               Precision precision, ReachedSet reached) {
-        return Pair.create(s, precision);
+    public Pair<AbstractState, Precision> prec(AbstractState s, Precision precision, ReachedSet reached) {
+		Precision newPrecision = ((IntervalPrecision) precision).inc();
+        return Pair.create(s, newPrecision);
     }
 
     @Override
