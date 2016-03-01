@@ -1,6 +1,5 @@
 package org.jakstab.analysis.newIntervals.test;
 
-import junit.framework.AssertionFailedError;
 import org.jakstab.analysis.newIntervals.Bits;
 import org.jakstab.analysis.newIntervals.Interval;
 import org.jakstab.rtl.Context;
@@ -44,7 +43,7 @@ public class IntervalTest {
 		Interval i = Interval.abstractEval(e);
 		for (RTLNumber r : rs) {
 			if (!i.isElement(r.longValue())) {
-				throw new AssertionFailedError("Analysis unsound! Found " + r + ", which is not an element of " + i + ", but should be. In Expression " + e);
+				throw new AssertionError("Analysis unsound! Found " + r + ", which is not an element of " + i + ", but should be. In Expression " + e);
 			}
 		}
 	}
@@ -60,7 +59,7 @@ public class IntervalTest {
 		RTLNumber[] someNumbers = new RTLNumber[someLongs.length];
 		Bits bits = Bits.fromInt(bitsize);
 		for (int i = 0; i < someLongs.length; i++) {
-			assert (someLongs[i] & bits.getMask()) == someLongs[i];
+			assert (someLongs[i] & bits.getMask()) == someLongs[i] || ((someLongs[i] & ~bits.getMask()) == ~bits.getMask());
 			someNumbers[i] = ExpressionFactory.createNumber(someLongs[i], bitsize);
 		}
 		return numbers(someNumbers);

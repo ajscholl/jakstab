@@ -1,5 +1,6 @@
 package org.jakstab.analysis.newIntervals;
 
+import org.jakstab.analysis.newIntervals.integral.Word;
 import org.jakstab.rtl.BitVectorType;
 
 /**
@@ -43,34 +44,14 @@ public enum Bits implements BitVectorType {
 	}
 
 	/**
-	 * Add a to b mod 2^bits.
-	 * @param a First summand.
-	 * @param b Second summand.
-	 * @return a + b `mod` 2^bits.
-	 */
-	public long add(long a, long b) {
-		return a + b & mask;
-	}
-
-	/**
-	 * Subtract a from b mod 2^bits.
-	 * @param a The minuend.
-	 * @param b The subtrahend.
-	 * @return a - b `mod` 2^bits.
-	 */
-	public long sub(long a, long b) {
-		return a - b & mask;
-	}
-
-	/**
 	 * Compute b <=_a c, i.e. compare two numbers relative to some other number.
 	 * @param a The number to be relative to.
 	 * @param b The first number to compare.
 	 * @param c The second number to compare.
 	 * @return boolean
 	 */
-	public boolean leq(long a, long b, long c) {
-		return sub(b, a) <= sub(c, a);
+	public static boolean leq(Word a, Word b, Word c) {
+		return b.sub(a).lessThanOrEqual(c.sub(a));
 	}
 
 	public static Bits fromInt(int bitWidth) {

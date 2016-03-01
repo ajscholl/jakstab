@@ -5,6 +5,8 @@ import org.jakstab.analysis.AbstractState;
 import org.jakstab.analysis.AbstractValue;
 import org.jakstab.analysis.LatticeElement;
 import org.jakstab.analysis.Precision;
+import org.jakstab.analysis.newIntervals.integral.Word;
+import org.jakstab.analysis.newIntervals.integral.Word64;
 import org.jakstab.cfa.Location;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
@@ -13,23 +15,24 @@ import org.jakstab.util.Logger;
 import org.jakstab.util.Sets;
 import org.jakstab.util.Tuple;
 
-import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.*;
 
+@SuppressWarnings("unchecked, unused")
 public class Interval implements Comparable<Interval>, AbstractState, AbstractValue {
 
 	private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
 
-    private final long minBits;
-    private final long maxBits;
+    private final Word minBits;
+    private final Word maxBits;
     private final Bits bits;
     private final IntervalKind kind;
 
-	private static final Interval undefInterval = new Interval(0, 0, Bits.BIT0, IntervalKind.UNDEF);
+	private static final Interval undefInterval = new Interval(null, null, Bits.BIT0, IntervalKind.UNDEF);
 	private static final EnumMap<Bits, Interval> botIntervals = new EnumMap<>(Bits.class);
 	private static final EnumMap<Bits, Interval> topIntervals = new EnumMap<>(Bits.class);
 
-    private Interval (long minBits, long maxBits, Bits bits, IntervalKind kind) {
+    private Interval (Word<Word<? extends Word>> minBits, Word<Word<? extends Word>> maxBits, Bits bits, IntervalKind kind) {
         assert bits != null;
         assert kind != null;
 
@@ -46,7 +49,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
     public static Interval mkTopInterval(Bits bits) {
 		Interval i = topIntervals.get(bits);
 		if (i == null) {
-			i = new Interval(0, 0, bits, IntervalKind.TOP);
+			i = new Interval(null, null, bits, IntervalKind.TOP);
 			topIntervals.put(bits, i);
 		}
         return i;
@@ -55,15 +58,21 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
     public static Interval mkBotInveral(Bits bits) {
 		Interval i = botIntervals.get(bits);
 		if (i == null) {
-			i = new Interval(0, 0, bits, IntervalKind.BOT);
+			i = new Interval(null, null, bits, IntervalKind.BOT);
 			botIntervals.put(bits, i);
 		}
 		return i;
     }
 
-    private static Interval mkSomeInterval(long min, long max, Bits bits) {
-        return new Interval(min & bits.getMask(), max & bits.getMask(), bits, IntervalKind.INTERVAL);
-    }
+	private static Interval mkSomeInterval(long min, long max, Bits bits) {
+		Word minW = Word.mkWord(min, bits);
+		Word maxW = Word.mkWord(max, bits);
+		return new Interval(minW, maxW, bits, IntervalKind.INTERVAL);
+	}
+
+	private static Interval mkSomeInterval(Word min, Word max, Bits bits) {
+		return mkSomeInterval(min.longValue(), max.longValue(), bits);
+	}
 
     @Override
     public int compareTo(Interval t) {
@@ -71,7 +80,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         if (kind != t.kind) {
 			return kind.compareTo(t.kind);
         } else if (kind == IntervalKind.INTERVAL) {
-			return (minBits == t.minBits) ? Long.compare(maxBits, t.maxBits) : Long.compare(minBits, t.minBits); // FIXME does this work with cut off bit patterns?
+			return (minBits == t.minBits) ? maxBits.compareTo(t.maxBits) : minBits.compareTo(t.minBits);
 		} else {
             return 0;
         }
@@ -84,8 +93,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 	@Override
 	public int hashCode() {
-        long h = minBits ^ maxBits;
-		return kind.hashCode() ^ bits.hashCode() ^ (int)h ^ (int)(h >>> 32);
+		return kind.hashCode() ^ bits.hashCode() ^ minBits.hashCode() ^ maxBits.hashCode();
 	}
 
 	@Override
@@ -102,15 +110,15 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			return RTLNumber.ALL_NUMBERS;
 		}
 		Set<RTLNumber> s = new FastSet<>();
-		if (minBits <= maxBits) {
-			for (long i = minBits; i <= maxBits; i++) {
+		if (minBits.lessThanOrEqual(maxBits)) {
+			for (long i = minBits.unsafeInternalValue(); i <= maxBits.unsafeInternalValue(); i++) {
 				s.add(ExpressionFactory.createNumber(i, bits.getBits()));
 			}
 		} else {
-			for (long i = 0; i <= minBits; i++) {
+			for (long i = 0; i <= minBits.unsafeInternalValue(); i++) {
 				s.add(ExpressionFactory.createNumber(i, bits.getBits()));
 			}
-			for (long i = maxBits; i != Long.MIN_VALUE; i++) {
+			for (long i = maxBits.unsafeInternalValue(); i != Long.MIN_VALUE; i++) {
 				s.add(ExpressionFactory.createNumber(i, bits.getBits()));
 			}
 		}
@@ -148,10 +156,10 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		if (isElement(t.maxBits) && t.isElement(minBits)) {
 			return mkSomeInterval(t.minBits, maxBits, bits);
 		}
-		BigDecimal r1 = internalSize(maxBits, t.minBits, bits);
-		BigDecimal r2 = internalSize(t.maxBits, minBits, bits);
+		BigInteger r1 = internalSize(maxBits, t.minBits);
+		BigInteger r2 = internalSize(t.maxBits, minBits);
 		int cmp = r1.compareTo(r2);
-		if (cmp < 0 || cmp == 0 && minBits <= t.minBits) {
+		if (cmp < 0 || cmp == 0 && minBits.lessThan(t.minBits)) {
 			return mkSomeInterval(minBits, t.maxBits, bits);
 		}
 		return mkSomeInterval(t.minBits, maxBits, bits);
@@ -175,7 +183,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	@Override
 	public Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression... expressions) {
 		logger.debug("projection from concretization for " + expressions.length + " expressions");
-		Tuple<Set<RTLNumber>> cValues = new Tuple<Set<RTLNumber>>(expressions.length);
+		Tuple<Set<RTLNumber>> cValues = new Tuple<>(expressions.length);
 		for (int i=0; i<expressions.length; i++) {
 			Interval aValue = abstractEval(expressions[i]);
 			logger.debug("expression: " + expressions[i] + " evalutated to: " + aValue + " " + aValue.isTop());
@@ -214,25 +222,20 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 	/**
      * Get the size of the interval.
-     * @return The number of elements in the interval. It can be larger than a long, so it is returned as a BigDecimal.
+     * @return The number of elements in the interval. It can be larger than a long, so it is returned as a BigInteger.
      */
-    public BigDecimal size() {
+    public BigInteger size() {
 		if (isTop()) {
-			return BigDecimal.valueOf(2).pow(bits.getBits());
+			return BigInteger.valueOf(2).pow(bits.getBits());
 		} else if (isBot()) {
-			return BigDecimal.ZERO;
+			return BigInteger.ZERO;
 		} else {
-			return internalSize(minBits, maxBits, bits);
+			return internalSize(minBits, maxBits);
 		}
     }
 
-    private static BigDecimal internalSize(long min, long max, Bits bits) {
-        long v = bits.add(bits.sub(max, min), 1);
-        if (v >= 0) {
-            return BigDecimal.valueOf(v);
-        } else {
-            return BigDecimal.valueOf(v).add(BigDecimal.valueOf(2).pow(bits.getBits()));
-        }
+    private static BigInteger internalSize(Word min, Word max) {
+        return Word64.wordToBigInteger(max.sub(min).inc().longValue());
     }
 
     /**
@@ -243,7 +246,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
             case BOT: return mkTopInterval(bits);
             case TOP: return mkBotInveral(bits);
 			case UNDEF: return this;
-            default: return mkSomeInterval(bits.add(maxBits, 1), bits.sub(minBits, 1), bits);
+            default: return mkSomeInterval(maxBits.inc(), minBits.dec(), bits);
         }
     }
 
@@ -253,7 +256,18 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
      * @return True if the value is in the interval.
      */
     public boolean isElement(long e) {
-		return isTop() || !isBot() && bits.leq(minBits, e, maxBits);
+		assert Word.mkWord(e, bits).longValue() == e;
+		return isElement(Word.mkWord(e, bits));
+	}
+
+	/**
+	 * Check if a value is in the interval.
+	 * @param e The value.
+	 * @return True if the value is in the interval.
+	 */
+	public boolean isElement(Word e) {
+		assert Word.mkWord(e, bits) == e;
+		return isTop() || !isBot() && Bits.leq(minBits, e, maxBits);
 	}
 
 	/**
@@ -278,12 +292,12 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
     private Interval pseudoMeet(Interval t) {
-        return ((Interval)(invert().join(t.invert()))).invert();
+        return (invert().join(t.invert())).invert();
     }
 
     private Interval gap(Interval t) {
         checkCompatible(t);
-        if (!t.isElement(maxBits) && !isElement(t.minBits)) {
+        if (kind == IntervalKind.INTERVAL && t.kind == IntervalKind.INTERVAL && !t.isElement(maxBits) && !isElement(t.minBits)) {
             return mkSomeInterval(t.minBits, maxBits, bits).invert();
         } else {
             return mkBotInveral(bits);
@@ -325,7 +339,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         Interval f = mkBotInveral(bits);
         Interval g = mkBotInveral(bits);
         for (Interval e : s) {
-            if (e.kind == IntervalKind.TOP || e.kind == IntervalKind.INTERVAL && bits.leq(0, e.maxBits, e.minBits)) {
+            if (e.kind == IntervalKind.TOP || e.kind == IntervalKind.INTERVAL && Bits.leq(Word.mkWord(0, bits), e.maxBits, e.minBits)) {
                 f.extent(e);
             }
         }
@@ -397,7 +411,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		if (!getNP().isSubsetOf(this)) {
 			return new Interval[] {this};
 		}
-		return new Interval[] {mkSomeInterval(minBits, tmp - 1L, bits), mkSomeInterval(tmp, maxBits, bits)};
+		return new Interval[] {mkSomeInterval(minBits.unsafeInternalValue(), tmp - 1L, bits), mkSomeInterval(tmp, maxBits.unsafeInternalValue(), bits)};
 	}
 
 	/**
@@ -409,6 +423,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		if (isBot()) {
 			return new Interval[] {};
 		}
+		// TODO is this correct?
 		long tmp = 1L << (bits.getBits() - 1L);
 		if (isTop()) {
 			return new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
@@ -416,12 +431,101 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		if (!getSP().isSubsetOf(this)) {
 			return new Interval[] {this};
 		}
-		return new Interval[] {mkSomeInterval(minBits, tmp - 1L, bits), mkSomeInterval(tmp, maxBits, bits)};
+		return new Interval[] {mkSomeInterval(minBits.unsafeInternalValue(), tmp - 1L, bits), mkSomeInterval(tmp, maxBits.unsafeInternalValue(), bits)};
 	}
 
-	public Interval widen(Interval other) {
-		checkCompatible(other);
-		// TODO: this is really weak
+	private Set<Interval> cut() {
+		Set<Interval> result = new FastSet<>();
+		for (Interval u : nsplit()) {
+			Collections.addAll(result, u.ssplit());
+		}
+		return result;
+	}
+
+	private Interval mul_u(Interval t) {
+		checkCompatible(t);
+		BigInteger a = minBits.bigValue();
+		BigInteger b = maxBits.bigValue();
+		BigInteger c = t.minBits.bigValue();
+		BigInteger d = t.maxBits.bigValue();
+		if (b.multiply(d).subtract(a.multiply(c)).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) == -1) {
+			return mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+		}
+		return mkTopInterval(bits);
+	}
+
+	private Interval mul_s(Interval t) {
+		checkCompatible(t);
+		BigInteger a = minBits.bigValue();
+		BigInteger b = maxBits.bigValue();
+		BigInteger c = t.minBits.bigValue();
+		BigInteger d = t.maxBits.bigValue();
+		BigInteger twoW = BigInteger.valueOf(2).pow(bits.getBits());
+		boolean a_msb = minBits.msb();
+		boolean b_msb = maxBits.msb();
+		boolean c_msb = t.minBits.msb();
+		boolean d_msb = t.maxBits.msb();
+		if (a_msb == b_msb && b_msb == c_msb && c_msb == d_msb && b.multiply(d).subtract(a.multiply(c)).compareTo(twoW) == -1) {
+			return mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+		}
+		if (a_msb && b_msb && !c_msb && !d_msb && b.multiply(c).subtract(a.multiply(d)).compareTo(twoW) == -1) {
+			return mkSomeInterval(minBits.mul(t.maxBits), maxBits.mul(t.minBits), bits);
+		}
+		if (!a_msb && !b_msb && c_msb && d_msb && a.multiply(d).subtract(b.multiply(c)).compareTo(twoW) == -1) {
+			return mkSomeInterval(maxBits.mul(t.minBits), minBits.mul(t.maxBits), bits);
+		}
+		return mkTopInterval(bits);
+	}
+
+	private Interval[] mul_us(Interval t) {
+		return mul_u(t).intersection(mul_s(t));
+	}
+
+	public Interval mulInterval(Interval t) {
+		checkCompatible(t);
+		Set<Interval> s = new FastSet<>();
+		for (Interval u : cut()) {
+			for (Interval v : t.cut()) {
+				Collections.addAll(s, u.mul_us(v));
+			}
+		}
+		return joins(s);
+	}
+
+	public Interval widen(Interval t) {
+		checkCompatible(t);
+		if (isBot()) {
+			return t;
+		}
+		if (t.isBot()) {
+			return this;
+		}
+		if (isTop()) {
+			return this;
+		}
+		if (t.isTop()) {
+			return t;
+		}
+		if (t.lessOrEqual(this)) {
+			return this;
+		}
+		if (size().compareTo(BigInteger.valueOf(2).pow(bits.getBits() - 1)) >= 0) {
+			return mkTopInterval(bits);
+		}
+		Interval tmp = join(t);
+		Word one = Word.mkWord(1, bits);
+		Word two = Word.mkWord(2, bits);
+		if (tmp.equals(this)) {
+			return mkSomeInterval(minBits, t.maxBits, bits).join(
+					mkSomeInterval(minBits, maxBits.mul(two).sub(minBits).add(one), bits));
+		}
+		if (tmp.equals(t)) {
+			return mkSomeInterval(t.minBits, maxBits, bits).join(
+					mkSomeInterval(minBits.mul(two).sub(maxBits).sub(one), maxBits, bits));
+		}
+		if (t.isElement(minBits) && t.isElement(maxBits)) {
+			return t.join(mkSomeInterval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).add(one), bits));
+		}
 		return mkTopInterval(bits);
 	}
 
@@ -430,8 +534,11 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         if (isBot() || t.isBot()) {
             return mkBotInveral(bits);
         }
-        if (size().add(t.size()).compareTo(BigDecimal.valueOf(2).pow(bits.getBits())) <= 0) {
-            return mkSomeInterval(bits.add(minBits, t.minBits), bits.add(maxBits, t.maxBits), bits);
+		if (isTop() || t.isTop()) {
+			return mkTopInterval(bits);
+		}
+        if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
+			return mkSomeInterval(minBits.add(t.minBits), maxBits.add(t.maxBits), bits);
         }
         return mkTopInterval(bits);
     }
@@ -441,8 +548,8 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		if (isBot() || t.isBot()) {
 			return mkBotInveral(bits);
 		}
-        if (size().add(t.size()).compareTo(BigDecimal.valueOf(2).pow(bits.getBits())) <= 0) {
-			return mkSomeInterval(bits.sub(minBits, t.minBits), bits.sub(maxBits, t.maxBits), bits);
+        if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
+			return mkSomeInterval(minBits.sub(t.minBits), maxBits.sub(t.maxBits), bits);
         }
 		return mkTopInterval(bits);
     }
@@ -533,9 +640,9 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			public Interval visit(RTLConditionalExpression e) {
 				Interval cond = abstractEval(e.getCondition());
 				assert cond.bits == Bits.BIT1 : "Condition has to be a boolean";
-				if (cond.minBits == cond.maxBits) {
-					if (cond.minBits != 0) {
-						assert cond.minBits == 1;
+				if (!cond.isTop() && cond.minBits == cond.maxBits) {
+					if (cond.minBits.unsafeInternalValue() != 0) {
+						assert cond.minBits.unsafeInternalValue() == 1;
 						return abstractEval(e.getTrueExpression());
 					}
 					return abstractEval(e.getFalseExpression());
@@ -615,6 +722,10 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 						e1 = abstractEval(args[1]);
 						return e0.addInterval(e1);
 					case MUL:
+						assert args.length == 2;
+						e0 = abstractEval(args[0]);
+						e1 = abstractEval(args[1]);
+						return e0.mulInterval(e1);
 					case FMUL:
 					case FDIV:
 						assert args.length == 2;
