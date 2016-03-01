@@ -1,13 +1,11 @@
-package org.jakstab.analysis.newIntervals.integral;
+package org.jakstab.analysis.newIntervals.word;
 
 import org.jakstab.analysis.newIntervals.Bits;
 
 import java.math.BigInteger;
+import java.util.HashMap;
 
-/**
- * Created by jonas on 2/29/16.
- */
-public abstract class Word<T extends Word> implements Integral<T>, Comparable<T> {
+public abstract class Word implements Comparable<Word> {
 
 	/**
 	 * The given internal payload. Upper bits should be 0.
@@ -31,7 +29,34 @@ public abstract class Word<T extends Word> implements Integral<T>, Comparable<T>
 	 * @param val The payload.
 	 * @return The new instance.
 	 */
-	protected abstract T mkThis(long val);
+	protected abstract Word mkThis(long val);
+
+	/**
+	 * Get the cache for this type.
+	 *
+	 * @return The cache.
+	 */
+	protected abstract HashMap<Long, Word> getCache();
+
+	/**
+	 * Create a new instance of me, but with the given payload. Caches small numbers.
+	 *
+	 * @param val The payload.
+	 * @return The new instance.
+	 */
+	protected Word mkThisCached(long val) {
+		if (val < 100 && val > -100) {
+			HashMap<Long, Word> cache = getCache();
+			Long keyVal = val;
+			Word w = cache.get(keyVal);
+			if (w == null) {
+				w = mkThis(val);
+				cache.put(keyVal, w);
+			}
+			return w;
+		}
+		return mkThis(val);
+	}
 
 	/**
 	 * Get the internal representation of the number. The upper bits may be zero even
@@ -63,104 +88,85 @@ public abstract class Word<T extends Word> implements Integral<T>, Comparable<T>
 		return longValue() < 0;
 	}
 
-	@Override
-	public T add(T b) {
-		return mkThis(val + b.val);
+	public Word add(Word b) {
+		return mkThisCached(val + b.val);
 	}
 
-	@Override
-	public T sub(T b) {
-		return mkThis(val - b.val);
+	public Word sub(Word b) {
+		return mkThisCached(val - b.val);
 	}
 
-	@Override
-	public T mul(T b) {
-		return mkThis(val * b.val);
+	public Word mul(Word b) {
+		return mkThisCached(val * b.val);
 	}
 
-	@Override
-	public T div(T b) {
-		return mkThis(val / b.val);
+	public Word div(Word b) {
+		return mkThisCached(val / b.val);
 	}
 
-	@Override
-	public T mod(T b) {
-		return mkThis(val % b.val);
+	public Word mod(Word b) {
+		return mkThisCached(val % b.val);
 	}
 
-	@Override
-	public T inc() {
-		return mkThis(val + 1);
+	public Word inc() {
+		return mkThisCached(val + 1);
 	}
 
-	@Override
-	public T dec() {
-		return mkThis(val - 1);
+	public Word dec() {
+		return mkThisCached(val - 1);
 	}
 
-	@Override
-	public T shl(T b) {
+	public Word shl(Word b) {
+		if ((b.val & ~63) != 0) {
+			return mkThisCached(0);
+		}
+		return mkThisCached(val << b.val);
+	}
+
+	public Word shr(Word b) {
 		if ((b.val & ~63) != 0) {
 			return mkThis(0);
 		}
-		return mkThis(val << b.val);
+		return mkThisCached(val >>> b.val);
 	}
 
-	@Override
-	public T shr(T b) {
-		if ((b.val & ~63) != 0) {
-			return mkThis(0);
-		}
-		return mkThis(val >>> b.val);
+	public Word and(Word b) {
+		return mkThisCached(val & b.val);
 	}
 
-	@Override
-	public T and(T b) {
-		return mkThis(val & b.val);
+	public Word or(Word b) {
+		return mkThisCached(val | b.val);
 	}
 
-	@Override
-	public T or(T b) {
-		return mkThis(val | b.val);
+	public Word xor(Word b) {
+		return mkThisCached(val ^ b.val);
 	}
 
-	@Override
-	public T xor(T b) {
-		return mkThis(val ^ b.val);
+	public Word not() {
+		return mkThisCached(~val);
 	}
 
-	@Override
-	public T not() {
-		return mkThis(~val);
-	}
-
-	@Override
-	public boolean lessThan(T b) {
+	public boolean lessThan(Word b) {
 		return val < b.val;
 	}
 
-	@Override
-	public boolean greaterThan(T b) {
+	public boolean greaterThan(Word b) {
 		return !lessThanOrEqual(b);
 	}
 
-	@Override
-	public boolean lessThanOrEqual(T b) {
+	public boolean lessThanOrEqual(Word b) {
 		return val <= b.val;
 	}
 
-	@Override
-	public boolean greaterThanOrEqual(T b) {
+	public boolean greaterThanOrEqual(Word b) {
 		return !lessThan(b);
 	}
 
-	@Override
-	public boolean equalTo(T b) {
+	public boolean equalTo(Word b) {
 		return val == b.val;
 	}
 
-	@Override
-	public boolean unequalTo(T b) {
+	public boolean unequalTo(Word b) {
 		return val != b.val;
 	}
 
@@ -180,7 +186,7 @@ public abstract class Word<T extends Word> implements Integral<T>, Comparable<T>
 	}
 
 	@Override
-	public int compareTo(T o) {
+	public int compareTo(Word o) {
 		if (lessThan(o)) {
 			return -1;
 		}
@@ -215,7 +221,7 @@ public abstract class Word<T extends Word> implements Integral<T>, Comparable<T>
 	 * @param bits The size.
 	 * @return The word.
 	 */
-	public static Word<?> mkWord(Word w, Bits bits) {
+	public static Word mkWord(Word w, Bits bits) {
 		if ((w.val & bits.getMask()) == w.val) {
 			return w;
 		}

@@ -5,8 +5,8 @@ import org.jakstab.analysis.AbstractState;
 import org.jakstab.analysis.AbstractValue;
 import org.jakstab.analysis.LatticeElement;
 import org.jakstab.analysis.Precision;
-import org.jakstab.analysis.newIntervals.integral.Word;
-import org.jakstab.analysis.newIntervals.integral.Word64;
+import org.jakstab.analysis.newIntervals.word.Word;
+import org.jakstab.analysis.newIntervals.word.Word64;
 import org.jakstab.cfa.Location;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
@@ -18,7 +18,6 @@ import org.jakstab.util.Tuple;
 import java.math.BigInteger;
 import java.util.*;
 
-@SuppressWarnings("unchecked, unused")
 public class Interval implements Comparable<Interval>, AbstractState, AbstractValue {
 
 	private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
@@ -31,8 +30,9 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	private static final Interval undefInterval = new Interval(null, null, Bits.BIT0, IntervalKind.UNDEF);
 	private static final EnumMap<Bits, Interval> botIntervals = new EnumMap<>(Bits.class);
 	private static final EnumMap<Bits, Interval> topIntervals = new EnumMap<>(Bits.class);
+	private static final Interval[] emptySet = new Interval[] {};
 
-    private Interval (Word<Word<? extends Word>> minBits, Word<Word<? extends Word>> maxBits, Bits bits, IntervalKind kind) {
+    private Interval (Word minBits, Word maxBits, Bits bits, IntervalKind kind) {
         assert bits != null;
         assert kind != null;
 
@@ -40,6 +40,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         this.maxBits = maxBits;
         this.bits = bits;
         this.kind = kind;
+		logger.debug("Created new interval " + this);
     }
 
 	public static Interval mkDefaultInterval() {
@@ -55,7 +56,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         return i;
     }
 
-    public static Interval mkBotInveral(Bits bits) {
+    public static Interval mkBotInterval(Bits bits) {
 		Interval i = botIntervals.get(bits);
 		if (i == null) {
 			i = new Interval(null, null, bits, IntervalKind.BOT);
@@ -133,41 +134,41 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	@Override
 	public Interval join(LatticeElement l) {
 		Interval t = (Interval) l;
-		checkCompatible(t);
+		final Interval result;
+		assertCompatible(t);
 		if (kind == IntervalKind.UNDEF) {
-			return t;
+			result = t;
+		} else if (t.kind == IntervalKind.UNDEF) {
+			result = this;
+		} else if (lessOrEqual(t)) {
+			result = t;
+		} else if (t.lessOrEqual(this)) {
+			result = this;
+		} else if (t.isElement(minBits) && t.isElement(maxBits) && isElement(t.minBits) && isElement(t.maxBits)) {
+			result = mkTopInterval(bits);
+		} else if (t.isElement(maxBits) && isElement(t.minBits)) {
+			result = mkSomeInterval(minBits, t.maxBits, bits);
+		} else if (isElement(t.maxBits) && t.isElement(minBits)) {
+			result = mkSomeInterval(t.minBits, maxBits, bits);
+		} else {
+			BigInteger r1 = internalSize(maxBits, t.minBits);
+			BigInteger r2 = internalSize(t.maxBits, minBits);
+			int cmp = r1.compareTo(r2);
+			if (cmp < 0 || cmp == 0 && minBits.lessThan(t.minBits)) {
+				result = mkSomeInterval(minBits, t.maxBits, bits);
+			} else {
+				result = mkSomeInterval(t.minBits, maxBits, bits);
+			}
 		}
-		if (t.kind == IntervalKind.UNDEF) {
-			return this;
-		}
-
-		if (isSubsetOf(t)) {
-			return t;
-		}
-		if (t.isSubsetOf(this)) {
-			return this;
-		}
-		if (t.isElement(minBits) && t.isElement(maxBits) && isElement(t.minBits) && isElement(t.maxBits)) {
-			return mkTopInterval(bits);
-		}
-		if (t.isElement(maxBits) && isElement(t.minBits)) {
-			return mkSomeInterval(minBits, t.maxBits, bits);
-		}
-		if (isElement(t.maxBits) && t.isElement(minBits)) {
-			return mkSomeInterval(t.minBits, maxBits, bits);
-		}
-		BigInteger r1 = internalSize(maxBits, t.minBits);
-		BigInteger r2 = internalSize(t.maxBits, minBits);
-		int cmp = r1.compareTo(r2);
-		if (cmp < 0 || cmp == 0 && minBits.lessThan(t.minBits)) {
-			return mkSomeInterval(minBits, t.maxBits, bits);
-		}
-		return mkSomeInterval(t.minBits, maxBits, bits);
+		logger.debug("Joining " + this + " and " + t + " to " + result);
+		assert lessOrEqual(result) && t.lessOrEqual(result) : "join returned something which is not greater or equal";
+		return result;
 	}
 
 	@Override
 	public boolean lessOrEqual(LatticeElement l) {
-		return isSubsetOf((Interval)l);
+		Interval t = (Interval) l;
+		return isSubsetOf(t);
 	}
 
 	@Override
@@ -186,7 +187,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		Tuple<Set<RTLNumber>> cValues = new Tuple<>(expressions.length);
 		for (int i=0; i<expressions.length; i++) {
 			Interval aValue = abstractEval(expressions[i]);
-			logger.debug("expression: " + expressions[i] + " evalutated to: " + aValue + " " + aValue.isTop());
+			logger.debug("expression: " + expressions[i] + " evaluated to: " + aValue + " " + aValue.isTop());
 			if(aValue.isTop()) {
 				//is Boolean expression?
 				if(expressions[i].getBitWidth() == 1)  {
@@ -225,13 +226,16 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
      * @return The number of elements in the interval. It can be larger than a long, so it is returned as a BigInteger.
      */
     public BigInteger size() {
+		final BigInteger size;
 		if (isTop()) {
-			return BigInteger.valueOf(2).pow(bits.getBits());
+			size = BigInteger.valueOf(2).pow(bits.getBits());
 		} else if (isBot()) {
-			return BigInteger.ZERO;
+			size = BigInteger.ZERO;
 		} else {
-			return internalSize(minBits, maxBits);
+			size = internalSize(minBits, maxBits);
 		}
+		logger.debug("Size of " + this + " is " + size);
+		return size;
     }
 
     private static BigInteger internalSize(Word min, Word max) {
@@ -242,91 +246,135 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
      * Invert this interval.
      */
     public Interval invert() {
+		final Interval result;
         switch (kind) {
-            case BOT: return mkTopInterval(bits);
-            case TOP: return mkBotInveral(bits);
-			case UNDEF: return this;
-            default: return mkSomeInterval(maxBits.inc(), minBits.dec(), bits);
+            case BOT:
+				result = mkTopInterval(bits);
+				break;
+            case TOP:
+				result = mkBotInterval(bits);
+				break;
+			case UNDEF:
+				logger.debug("Inverting undefined interval, result is still undefined!");
+				result = this;
+				break;
+            default:
+				result = mkSomeInterval(maxBits.inc(), minBits.dec(), bits);
+				break;
         }
+		logger.debug("Inverting " + this + " to " + result);
+		return result;
     }
 
     /**
      * Check if a value is in the interval.
+	 *
      * @param e The value.
      * @return True if the value is in the interval.
      */
-    public boolean isElement(long e) {
-		assert Word.mkWord(e, bits).longValue() == e;
+    private boolean isElement(long e) {
+		assert bits.narrow(e) == e : "bad call to isElement with " + e + " (" + bits.narrow(e) + ", " + bits + ")";
 		return isElement(Word.mkWord(e, bits));
 	}
 
 	/**
 	 * Check if a value is in the interval.
+	 *
+	 * @param e The value.
+	 * @return True if the value is in the interval.
+	 */
+	public boolean isElement(RTLNumber e) {
+		Bits eBits = Bits.fromInt(e.getBitWidth());
+		assert bits == eBits : "Wrong bit-size. Got " + eBits + ", but expected " + bits;
+		return isElement(e.longValue());
+	}
+
+	/**
+	 * Check if a value is in the interval.
+	 *
 	 * @param e The value.
 	 * @return True if the value is in the interval.
 	 */
 	public boolean isElement(Word e) {
-		assert Word.mkWord(e, bits) == e;
-		return isTop() || !isBot() && Bits.leq(minBits, e, maxBits);
+		assert Word.mkWord(e, bits).equals(e);
+		boolean result = isTop() || !isBot() && Bits.leq(minBits, e, maxBits);
+		logger.debug(e + " element of " + this + ": " + result);
+		return result;
 	}
 
 	/**
-	 * Check if the given interval is compatible with the current one.
+	 * Assert that the given interval is compatible with the current one.
+	 *
 	 * @param t The interval to check.
 	 */
-	private void checkCompatible(Interval t) {
+	private void assertCompatible(Interval t) {
 		assert bits == t.bits || kind == IntervalKind.UNDEF || t.kind == IntervalKind.UNDEF;
 	}
 
     /**
-     * Check if an interval is a subinterval of this interval.
+     * Check if this interval is a sub-interval of another interval.
+	 *
      * @param t The interval to check.
-     * @return True if the interval is a subinterval.
+     * @return True if the interval is a sub-interval.
      */
     public boolean isSubsetOf(Interval t) {
-		checkCompatible(t);
-		return isBot() || t.isTop() ||
-				!(isTop() || t.isBot()) &&
-						t.isElement(minBits) && t.isElement(maxBits) &&
-						(!isElement(t.minBits) || !isElement(t.maxBits));
+		assertCompatible(t);
+		final boolean result;
+		if (isBot() || t.isTop()) {
+			result = true;
+		} else if (isTop() || t.isBot()) {
+			result = false;
+		} else if (minBits.equals(t.minBits) && maxBits.equals(t.maxBits)) {
+			// take care of equal intervals, this was not in the original paper!
+			result = true;
+		} else {
+			result = t.isElement(minBits) && t.isElement(maxBits) && (!isElement(t.minBits) || !isElement(t.maxBits));
+		}
+		logger.debug(this + " is a subset of " + t + ": " + result);
+		return result;
 	}
 
-    private Interval pseudoMeet(Interval t) {
-        return (invert().join(t.invert())).invert();
-    }
+    //private Interval meet(Interval t) {
+    //    return (invert().join(t.invert())).invert();
+    //}
 
     private Interval gap(Interval t) {
-        checkCompatible(t);
+        assertCompatible(t);
+		final Interval result;
         if (kind == IntervalKind.INTERVAL && t.kind == IntervalKind.INTERVAL && !t.isElement(maxBits) && !isElement(t.minBits)) {
-            return mkSomeInterval(t.minBits, maxBits, bits).invert();
+            result = mkSomeInterval(t.minBits, maxBits, bits).invert();
         } else {
-            return mkBotInveral(bits);
+            result = mkBotInterval(bits);
         }
+		logger.debug("Gap between " + this + " and " + t + " = " + result);
+		return result;
     }
 
     private Interval extent(Interval t) {
-		checkCompatible(t);
-        if (isSubsetOf(t)) {
-            return t;
-        }
-        if (t.isSubsetOf(this)) {
-            return this;
-        }
-        if (t.isElement(minBits) && t.isElement(maxBits) && isElement(t.minBits) && isElement(t.maxBits)) {
-            return mkTopInterval(bits);
-        }
-        if (t.isElement(maxBits) && isElement(t.minBits)) {
-            return mkSomeInterval(minBits, t.maxBits, bits);
-        }
-        if (isElement(t.maxBits) && t.isElement(minBits)) {
-			return mkSomeInterval(t.minBits, maxBits, bits);
-        }
-		return mkSomeInterval(minBits, t.maxBits, bits);
+		assertCompatible(t);
+		Interval result;
+        if (lessOrEqual(t)) {
+            result = t;
+        } else if (t.lessOrEqual(this)) {
+			result = this;
+        } else if (t.isElement(minBits) && t.isElement(maxBits) && isElement(t.minBits) && isElement(t.maxBits)) {
+			result = mkTopInterval(bits);
+        } else if (t.isElement(maxBits) && isElement(t.minBits)) {
+			result = mkSomeInterval(minBits, t.maxBits, bits);
+        } else if (isElement(t.maxBits) && t.isElement(minBits)) {
+			result = mkSomeInterval(t.minBits, maxBits, bits);
+        } else {
+			result = mkSomeInterval(minBits, t.maxBits, bits);
+		}
+		logger.debug("Extending " + this + " with " + t + " = " + result);
+		return result;
     }
 
     private static Interval bigger(Interval s, Interval t) {
-		s.checkCompatible(t);
-        return t.size().compareTo(s.size()) > 0 ? t : s;
+		s.assertCompatible(t);
+        Interval result = t.size().compareTo(s.size()) > 0 ? t : s;
+		logger.debug("Bigger of " + s + " and " + t + " = " + result);
+		return result;
     }
 
     public static Interval joins(Collection<Interval> c) {
@@ -335,9 +383,10 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
             s.add(e);
         }
         Collections.sort(s);
+		logger.debug("** starting joins of " + s);
         Bits bits = s.iterator().next().bits;
-        Interval f = mkBotInveral(bits);
-        Interval g = mkBotInveral(bits);
+        Interval f = mkBotInterval(bits);
+        Interval g = mkBotInterval(bits);
         for (Interval e : s) {
             if (e.kind == IntervalKind.TOP || e.kind == IntervalKind.INTERVAL && Bits.leq(Word.mkWord(0, bits), e.maxBits, e.minBits)) {
                 f.extent(e);
@@ -345,117 +394,153 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
         }
         for (Interval e : s) {
             g = bigger(g, f.gap(e));
-            f.extent(e);
+            f = f.extent(e);
         }
-        return bigger(f, g);
+        Interval result = bigger(f, g);
+		logger.debug("Joins of " + s + " = " + result);
+		for (Interval e : s) {
+			assert e.lessOrEqual(result) : "joins returned something not in the interval";
+		}
+		return result;
     }
 
 	public Interval[] intersection(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
+		final Interval[] result;
 		if (isBot() || t.isBot()) {
-			return new Interval[] {};
+			result = emptySet;
+		} else if (equals(t) || isTop()) {
+			result = new Interval[] {t};
+		} else if (t.isTop()) {
+			result = new Interval[] {this};
+		} else {
+			boolean minInT = t.isElement(minBits);
+			boolean maxInT = t.isElement(maxBits);
+			boolean tMinInThis = isElement(t.minBits);
+			boolean tMaxInThis = isElement((t.maxBits));
+			if (minInT && maxInT && tMinInThis && tMaxInThis) {
+				result = new Interval[] {mkSomeInterval(minBits, t.maxBits, bits), mkSomeInterval(maxBits, t.minBits, bits)};
+			} else if (minInT && maxInT) {
+				result = new Interval[] {this};
+			} else if (tMinInThis && tMaxInThis) {
+				result = new Interval[] {t};
+			} else if (minInT && tMaxInThis) {
+				result = new Interval[] {mkSomeInterval(minBits, t.maxBits, bits)};
+			} else if (maxInT && tMinInThis) {
+				result = new Interval[] {mkSomeInterval(maxBits, t.minBits, bits)};
+			} else {
+				result = emptySet;
+			}
 		}
-		if (equals(t) || isTop()) {
-			return new Interval[] {t};
-		}
-		if (t.isTop()) {
-			return new Interval[] {this};
-		}
-		boolean minInT = t.isElement(minBits);
-		boolean maxInT = t.isElement(maxBits);
-		boolean tMinInThis = isElement(t.minBits);
-		boolean tMaxInThis = isElement((t.maxBits));
-		if (minInT && maxInT && tMinInThis && tMaxInThis) {
-			return new Interval[] {mkSomeInterval(minBits, t.maxBits, bits), mkSomeInterval(maxBits, t.minBits, bits)};
-		}
-		if (minInT && maxInT) {
-			return new Interval[] {this};
-		}
-		if (tMinInThis && tMaxInThis) {
-			return new Interval[] {t};
-		}
-		if (minInT && tMaxInThis) {
-			return new Interval[] {mkSomeInterval(minBits, t.maxBits, bits)};
-		}
-		if (maxInT && tMinInThis) {
-			return new Interval[] {mkSomeInterval(maxBits, t.minBits, bits)};
-		}
-		return new Interval[] {};
+		logger.debug("Intersection of " + this + " and " + t + " = " + Arrays.toString(result));
+		return result;
 	}
 
-	private Interval getNP() {
+	private Interval getNorthPole() {
 		assert bits != Bits.BIT0;
 		long max = 1L << (bits.getBits() - 1L);
 		long min = max - 1L;
 		return mkSomeInterval(min, max, bits);
 	}
 
-	private Interval getSP() {
+	private Interval getSouthPole() {
 		assert bits != Bits.BIT0;
 		return mkSomeInterval(bits.getMask(), 0, bits);
 	}
 
 	/**
 	 * Split an interval at the north pole.
+	 *
 	 * @return All sub-intervals.
 	 */
-	private Interval[] nsplit() {
+	private Interval[] splitNorth() {
 		assert bits != Bits.BIT0;
+		final Interval[] result;
 		if (isBot()) {
-			return new Interval[] {};
+			result = emptySet;
+		} else {
+			long tmp = 1L << (bits.getBits() - 1L);
+			if (isTop()) {
+				result = new Interval[]{mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
+			} else if (!getNorthPole().isSubsetOf(this)) {
+				result = new Interval[]{this};
+			} else {
+				result = new Interval[]{mkSomeInterval(minBits.unsafeInternalValue(), tmp - 1L, bits), mkSomeInterval(tmp, maxBits.unsafeInternalValue(), bits)};
+			}
 		}
-		long tmp = 1L << (bits.getBits() - 1L);
-		if (isTop()) {
-			return new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
-		}
-		if (!getNP().isSubsetOf(this)) {
-			return new Interval[] {this};
-		}
-		return new Interval[] {mkSomeInterval(minBits.unsafeInternalValue(), tmp - 1L, bits), mkSomeInterval(tmp, maxBits.unsafeInternalValue(), bits)};
+		logger.debug("Splitting " + this + " at the north pole = " + Arrays.toString(result));
+		return result;
 	}
 
 	/**
 	 * Split an interval at the south pole.
+	 *
 	 * @return All sub-intervals.
 	 */
-	private Interval[] ssplit() {
+	private Interval[] splitSouth() {
 		assert bits != Bits.BIT0;
+		final Interval[] result;
 		if (isBot()) {
-			return new Interval[] {};
+			result = emptySet;
+		} else if (isTop()) {
+			long tmp = 1L << (bits.getBits() - 1L);
+			result =  new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
+		} else if (!getSouthPole().isSubsetOf(this)) {
+			result = new Interval[] {this};
+		} else {
+			result = new Interval[]{mkSomeInterval(0, maxBits.unsafeInternalValue(), bits), mkSomeInterval(minBits.unsafeInternalValue(), bits.getMask(), bits)};
 		}
-		// TODO is this correct?
-		long tmp = 1L << (bits.getBits() - 1L);
-		if (isTop()) {
-			return new Interval[] {mkSomeInterval(0, tmp - 1L, bits), mkSomeInterval(tmp, bits.getMask(), bits)};
-		}
-		if (!getSP().isSubsetOf(this)) {
-			return new Interval[] {this};
-		}
-		return new Interval[] {mkSomeInterval(minBits.unsafeInternalValue(), tmp - 1L, bits), mkSomeInterval(tmp, maxBits.unsafeInternalValue(), bits)};
+		logger.debug("Splitting " + this + " at the south pole = " + Arrays.toString(result));
+		return result;
 	}
 
 	private Set<Interval> cut() {
 		Set<Interval> result = new FastSet<>();
-		for (Interval u : nsplit()) {
-			Collections.addAll(result, u.ssplit());
+		for (Interval u : splitNorth()) {
+			Collections.addAll(result, u.splitSouth());
 		}
+		logger.debug("Cutting " + this + " = " + result);
 		return result;
 	}
 
+	private Interval extentBitSize() {
+		switch (bits) {
+			case BIT1:
+				assert !Options.failFast.getValue().booleanValue() : "Extending 1-bit interval";
+				logger.warn("Extending 1-bit interval!");
+				return mkSomeInterval(minBits, maxBits, Bits.BIT8);
+			case BIT8:
+				return mkSomeInterval(minBits, maxBits, Bits.BIT16);
+			case BIT16:
+				return mkSomeInterval(minBits, maxBits, Bits.BIT32);
+			case BIT32:
+				return mkSomeInterval(minBits, maxBits, Bits.BIT64);
+			case BIT64:
+				return this;
+			default:
+				assert !Options.failFast.getValue().booleanValue() : "Extending unknown interval size";
+				return this;
+		}
+	}
+
 	private Interval mul_u(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
 		BigInteger a = minBits.bigValue();
 		BigInteger b = maxBits.bigValue();
 		BigInteger c = t.minBits.bigValue();
 		BigInteger d = t.maxBits.bigValue();
+		final Interval result;
 		if (b.multiply(d).subtract(a.multiply(c)).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) == -1) {
-			return mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+			result = mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+		} else {
+			result = mkTopInterval(bits);
 		}
-		return mkTopInterval(bits);
+		logger.debug(this + " x_u " + t + " = " + result);
+		return result;
 	}
 
 	private Interval mul_s(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
 		BigInteger a = minBits.bigValue();
 		BigInteger b = maxBits.bigValue();
 		BigInteger c = t.minBits.bigValue();
@@ -465,96 +550,104 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		boolean b_msb = maxBits.msb();
 		boolean c_msb = t.minBits.msb();
 		boolean d_msb = t.maxBits.msb();
+		final Interval result;
 		if (a_msb == b_msb && b_msb == c_msb && c_msb == d_msb && b.multiply(d).subtract(a.multiply(c)).compareTo(twoW) == -1) {
-			return mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+			result = mkSomeInterval(minBits.mul(t.minBits), maxBits.mul(t.maxBits), bits);
+		} else if (a_msb && b_msb && !c_msb && !d_msb && b.multiply(c).subtract(a.multiply(d)).compareTo(twoW) == -1) {
+			result = mkSomeInterval(minBits.mul(t.maxBits), maxBits.mul(t.minBits), bits);
+		} else if (!a_msb && !b_msb && c_msb && d_msb && a.multiply(d).subtract(b.multiply(c)).compareTo(twoW) == -1) {
+			result = mkSomeInterval(maxBits.mul(t.minBits), minBits.mul(t.maxBits), bits);
+		} else {
+			result = mkTopInterval(bits);
 		}
-		if (a_msb && b_msb && !c_msb && !d_msb && b.multiply(c).subtract(a.multiply(d)).compareTo(twoW) == -1) {
-			return mkSomeInterval(minBits.mul(t.maxBits), maxBits.mul(t.minBits), bits);
-		}
-		if (!a_msb && !b_msb && c_msb && d_msb && a.multiply(d).subtract(b.multiply(c)).compareTo(twoW) == -1) {
-			return mkSomeInterval(maxBits.mul(t.minBits), minBits.mul(t.maxBits), bits);
-		}
-		return mkTopInterval(bits);
+		logger.debug(this + " x_s " + t + " = " + result);
+		return result;
 	}
 
 	private Interval[] mul_us(Interval t) {
-		return mul_u(t).intersection(mul_s(t));
+		Interval[] result = mul_u(t).intersection(mul_s(t));
+		logger.debug(this + " x_us " + t + " = " + Arrays.toString(result));
+		return result;
 	}
 
 	public Interval mulInterval(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
 		Set<Interval> s = new FastSet<>();
 		for (Interval u : cut()) {
+			Interval us = u.extentBitSize();
 			for (Interval v : t.cut()) {
-				Collections.addAll(s, u.mul_us(v));
+				Collections.addAll(s, us.mul_us(v.extentBitSize()));
 			}
 		}
-		return joins(s);
+		Interval result = joins(s);
+		logger.debug(this + " * " + t + " = " + result);
+		return result;
 	}
 
 	public Interval widen(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
+		final Interval result;
 		if (isBot()) {
-			return t;
+			result = t;
+		} else if (t.isBot()) {
+			result = this;
+		} else if (isTop()) {
+			result = this;
+		} else if (t.isTop()) {
+			result = t;
+		} else if (t.lessOrEqual(this)) {
+			result = this;
+		} else if (size().compareTo(BigInteger.valueOf(2).pow(bits.getBits() - 1)) >= 0) {
+			result = mkTopInterval(bits);
+		} else {
+			Interval tmp = join(t);
+			Word one = Word.mkWord(1, bits);
+			Word two = Word.mkWord(2, bits);
+			if (tmp.equals(this)) {
+				result = mkSomeInterval(minBits, t.maxBits, bits).join(
+						mkSomeInterval(minBits, maxBits.mul(two).sub(minBits).add(one), bits));
+			} else if (tmp.equals(t)) {
+				result = mkSomeInterval(t.minBits, maxBits, bits).join(
+						mkSomeInterval(minBits.mul(two).sub(maxBits).sub(one), maxBits, bits));
+			} else if (t.isElement(minBits) && t.isElement(maxBits)) {
+				result = t.join(mkSomeInterval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).add(one), bits));
+			} else {
+				result = mkTopInterval(bits);
+			}
 		}
-		if (t.isBot()) {
-			return this;
-		}
-		if (isTop()) {
-			return this;
-		}
-		if (t.isTop()) {
-			return t;
-		}
-		if (t.lessOrEqual(this)) {
-			return this;
-		}
-		if (size().compareTo(BigInteger.valueOf(2).pow(bits.getBits() - 1)) >= 0) {
-			return mkTopInterval(bits);
-		}
-		Interval tmp = join(t);
-		Word one = Word.mkWord(1, bits);
-		Word two = Word.mkWord(2, bits);
-		if (tmp.equals(this)) {
-			return mkSomeInterval(minBits, t.maxBits, bits).join(
-					mkSomeInterval(minBits, maxBits.mul(two).sub(minBits).add(one), bits));
-		}
-		if (tmp.equals(t)) {
-			return mkSomeInterval(t.minBits, maxBits, bits).join(
-					mkSomeInterval(minBits.mul(two).sub(maxBits).sub(one), maxBits, bits));
-		}
-		if (t.isElement(minBits) && t.isElement(maxBits)) {
-			return t.join(mkSomeInterval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).add(one), bits));
-		}
-		return mkTopInterval(bits);
+		logger.debug(this + " `widen` " + t + " = " + result);
+		return result;
 	}
 
     public Interval addInterval(Interval t) {
-        checkCompatible(t);
+        assertCompatible(t);
+		final Interval result;
         if (isBot() || t.isBot()) {
-            return mkBotInveral(bits);
-        }
-		if (isTop() || t.isTop()) {
-			return mkTopInterval(bits);
+            result = mkBotInterval(bits);
+        } else if (isTop() || t.isTop()) {
+			result = mkTopInterval(bits);
+		} else if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
+			result = mkSomeInterval(minBits.add(t.minBits), maxBits.add(t.maxBits), bits);
+        } else {
+			result = mkTopInterval(bits);
 		}
-        if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
-			return mkSomeInterval(minBits.add(t.minBits), maxBits.add(t.maxBits), bits);
-        }
-        return mkTopInterval(bits);
+		logger.debug(this + " + " + t + " = " + result);
+		return result;
     }
 
     public Interval subInterval(Interval t) {
-		checkCompatible(t);
+		assertCompatible(t);
+		final Interval result;
 		if (isBot() || t.isBot()) {
-			return mkBotInveral(bits);
+			result = mkBotInterval(bits);
+		} else if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
+			result = mkSomeInterval(minBits.sub(t.minBits), maxBits.sub(t.maxBits), bits);
+        } else {
+			result = mkTopInterval(bits);
 		}
-        if (size().add(t.size()).compareTo(BigInteger.valueOf(2).pow(bits.getBits())) <= 0) {
-			return mkSomeInterval(minBits.sub(t.minBits), maxBits.sub(t.maxBits), bits);
-        }
-		return mkTopInterval(bits);
+		logger.debug(this + " - " + t + " = " + result);
+		return result;
     }
-
-
 
 	public Set<AbstractState> abstractPost(final RTLStatement statement, final Precision precision) {
 		logger.verbose("start processing abstractPost(" + statement + ") " + statement.getLabel());

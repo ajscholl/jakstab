@@ -1,10 +1,12 @@
 package org.jakstab.analysis.newIntervals.test;
 
+import org.jakstab.Options;
 import org.jakstab.analysis.newIntervals.Bits;
 import org.jakstab.analysis.newIntervals.Interval;
 import org.jakstab.rtl.Context;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.util.FastSet;
+import org.jakstab.util.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -15,6 +17,9 @@ import java.util.Set;
  * Test for the interval analysis. Creates some expressions, checks whether they are handled in a sound way and fails otherwise.
  */
 public class IntervalTest {
+
+	private static final Logger logger = Logger.getLogger(IntervalTest.class);
+
 	public static void main(String[] args) {
 		RTLExpression e1 = numbers(8, -2, -1, 0, 1, 2);
 		RTLExpression e2 = numbers(8, 16, 32, 64, -128, -64);
@@ -24,11 +29,12 @@ public class IntervalTest {
 		RTLExpression e6 = ExpressionFactory.createAnd(e1, e2);
 		RTLExpression e7 = ExpressionFactory.createOr(e1, e2);
 		RTLExpression[] es = new RTLExpression[] {e1, e2, e3, e4, e5, e6, e7};
-		System.out.println("Running test...");
+		Options.verbosity.setValue(Logger.Level.DEBUG.ordinal());
+		logger.info("Running test...");
 		for (RTLExpression e : es) {
 			testEval(e);
 		}
-		System.out.println("Passed test");
+		logger.info("Passed test");
 	}
 
 	/**
@@ -37,12 +43,13 @@ public class IntervalTest {
 	 * @param e The expression.
 	 */
 	public static void testEval(RTLExpression e) {
-		System.out.println("Testing " + e);
+		logger.debug("*** Evaluating " + e + " ***");
 		Set<RTLNumber> rs = evalSet(e);
-		System.out.println("Evaluated set " + rs);
+		logger.debug("*** Real results: "  + rs + " ***");
 		Interval i = Interval.abstractEval(e);
+		logger.debug("*** Computed interval: " + i + " ***");
 		for (RTLNumber r : rs) {
-			if (!i.isElement(r.longValue())) {
+			if (!i.isElement(r)) {
 				throw new AssertionError("Analysis unsound! Found " + r + ", which is not an element of " + i + ", but should be. In Expression " + e);
 			}
 		}
@@ -123,15 +130,16 @@ public class IntervalTest {
 				assert bits.getBitWidth() <= 8; // larger bit sizes are bad...
 				Set<RTLNumber> result = new FastSet<>();
 				for (long i = 0; (i & bits.getMask()) == i; i++) { // this loop is broken for 64 bits
-					result.add(ExpressionFactory.createNumber(i, bits.getBitWidth()));
+					result.add(ExpressionFactory.createNumber(bits.narrow(i), bits.getBitWidth()));
 				}
 				return result;
 			}
 
 			@Override
 			public Set<RTLNumber> visit(RTLNumber e) {
-				// this is easy
-				return Collections.singleton(e);
+				// this is easy, just make sure we narrow the value to the correct range
+				Bits bits = Bits.fromInt(e.getBitWidth());
+				return Collections.singleton(ExpressionFactory.createNumber(bits.narrow(e.longValue()), bits.getBitWidth()));
 			}
 
 			/**
@@ -191,6 +199,11 @@ public class IntervalTest {
 				return evalSet(new RTLNondet(e.getBitWidth()));
 			}
 		};
-		return e.accept(visitor);
+		Set<RTLNumber> result = e.accept(visitor);
+		for (RTLNumber n : result) {
+			Bits bits = Bits.fromInt(n.getBitWidth());
+			assert n.longValue() == bits.narrow(n.longValue());
+		}
+		return result;
 	}
 }

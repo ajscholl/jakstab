@@ -1,8 +1,11 @@
-package org.jakstab.analysis.newIntervals.integral;
+package org.jakstab.analysis.newIntervals.word;
 
 import java.math.BigInteger;
+import java.util.HashMap;
 
-public class Word64 extends Word<Word64> implements Integral<Word64> {
+public class Word64 extends Word {
+
+	private static HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word64(long val) {
 		super(val);
@@ -14,7 +17,7 @@ public class Word64 extends Word<Word64> implements Integral<Word64> {
 	}
 
 	@Override
-	public Word64 mkThis(long val) {
+	public Word mkThis(long val) {
 		return new Word64(val);
 	}
 
@@ -24,23 +27,28 @@ public class Word64 extends Word<Word64> implements Integral<Word64> {
 	}
 
 	@Override
+	protected HashMap<Long, Word> getCache() {
+		return cache;
+	}
+
+	@Override
 	public BigInteger bigValue() {
 		return wordToBigInteger(val);
 	}
 
 	@Override
-	public Word64 mul(Word64 b) {
-		return mkThis(bigValue().multiply(b.bigValue()).longValue());
+	public Word mul(Word b) {
+		return mkThisCached(bigValue().multiply(b.bigValue()).longValue());
 	}
 
 	@Override
-	public Word64 div(Word64 b) {
-		return mkThis(bigValue().divide(b.bigValue()).longValue());
+	public Word div(Word b) {
+		return mkThisCached(bigValue().divide(b.bigValue()).longValue());
 	}
 
 	@Override
-	public Word64 mod(Word64 b) {
-		return mkThis(bigValue().mod(b.bigValue()).longValue());
+	public Word mod(Word b) {
+		return mkThisCached(bigValue().mod(b.bigValue()).longValue());
 	}
 
 	public static BigInteger wordToBigInteger(long w) {
@@ -51,7 +59,7 @@ public class Word64 extends Word<Word64> implements Integral<Word64> {
 	}
 
 	@Override
-	public String toString() {
+	public java.lang.String toString() {
 		if (val < 0) {
 			return bigValue().toString();
 		} else {
@@ -60,7 +68,7 @@ public class Word64 extends Word<Word64> implements Integral<Word64> {
 	}
 
 	@Override
-	public boolean lessThan(Word64 b) {
+	public boolean lessThan(Word b) {
 		if (val < 0) {
 			return b.val < 0 && val < b.val;
 		} else {
@@ -69,7 +77,7 @@ public class Word64 extends Word<Word64> implements Integral<Word64> {
 	}
 
 	@Override
-	public boolean lessThanOrEqual(Word64 b) {
+	public boolean lessThanOrEqual(Word b) {
 		return val == b.val || lessThan(b);
 	}
 }

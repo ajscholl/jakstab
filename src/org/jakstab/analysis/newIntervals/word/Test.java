@@ -1,14 +1,11 @@
-package org.jakstab.analysis.newIntervals.integral;
+package org.jakstab.analysis.newIntervals.word;
 
 import org.jakstab.analysis.newIntervals.Bits;
 
 import java.math.BigInteger;
 import java.util.Random;
 
-/**
- * Created by jonas on 2/29/16.
- */
-public class IntegralTest {
+public class Test {
 	public static void main(String[] args) {
 		long[] testData = new long[] {-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5};
 		Bits[] bits = new Bits[] {Bits.BIT8, Bits.BIT16, Bits.BIT32, Bits.BIT64};
@@ -25,7 +22,6 @@ public class IntegralTest {
 			}
 		}
 		System.out.println("Done");
-		assert false;
 	}
 
 	private static void test(long a, long b, Bits bit) {

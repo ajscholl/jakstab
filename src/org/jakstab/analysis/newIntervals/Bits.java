@@ -1,6 +1,6 @@
 package org.jakstab.analysis.newIntervals;
 
-import org.jakstab.analysis.newIntervals.integral.Word;
+import org.jakstab.analysis.newIntervals.word.Word;
 import org.jakstab.rtl.BitVectorType;
 
 /**
@@ -62,6 +62,21 @@ public enum Bits implements BitVectorType {
 			case 32: return BIT32;
 			case 64: return BIT64;
 			default: throw new IllegalArgumentException("Unknown bit-width: " + bitWidth);
+		}
+	}
+
+	public static long narrow(long val, int bitWidth) {
+		return fromInt(bitWidth).narrow(val);
+	}
+
+	public long narrow(long val) {
+		switch (this) {
+			case BIT1: return val != 0 ? -1 : 0;
+			case BIT8: return (long)((byte)val);
+			case BIT16: return (long)((short)val);
+			case BIT32: return (long)((int)val);
+			case BIT64: return val;
+			default: throw new UnsupportedOperationException("Can not narrow to an undefined bitwidth");
 		}
 	}
 }
