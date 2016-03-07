@@ -21,33 +21,33 @@ package org.jakstab.rtl.expressions;
 /**
  * Supported operators in our RTL. GT and GE are replaced by LT and LE,
  * MINUS by PLUS(NEG) and NEQ by NOT(EQ).
- * 
+ *
  * @author Johannes Kinder
  */
 public enum Operator {
 
 	UNKNOWN,
-	
+
 	// Operators for changing bitwidth
-	CAST, 
+	CAST,
 	SIGN_EXTEND("sign_extend"),
 	ZERO_FILL("zero_fill"),
 	FSIZE,
 
 	// Comparison
-	EQUAL("=="), 
+	EQUAL("=="),
 	LESS("<"), // Signed
 	LESS_OR_EQUAL("<="), // Signed
-	UNSIGNED_LESS("u<"), 
+	UNSIGNED_LESS("u<"),
 	UNSIGNED_LESS_OR_EQUAL("u<="),
 
 	// Unary operators
 	NOT("!"),
 	NEG("-"),
-	
+
 	// Associative commutative bitwise arithmetic operators
-	AND("&"), 
-	OR("|"), 
+	AND("&"),
+	OR("|"),
 	XOR("^"),
 	PLUS("+"),
 	MUL("*"),
@@ -55,32 +55,34 @@ public enum Operator {
 	FDIV,
 
 	// Other bitwise arithmetic operators
-	DIV, 
-	MOD, 
+	SDIV,
+	UDIV,
+	SMOD,
+	UMOD,
 	POWER_OF,
 
 	// Bitwise shift operations
-	SHR(">>>"), 
+	SHR(">>>"),
 	SAR(">>"), /* Shift right with sign extension */
-	SHL("<<"), 
-	ROL, 
-	ROR, 
-	ROLC, 
+	SHL("<<"),
+	ROL,
+	ROR,
+	ROLC,
 	RORC /* Rotate with carry */
 	;
-	
+
 	private String stringRep;
-	
+
 	private Operator() {
 		this.stringRep = this.name();
 	}
-	
+
 	private Operator(String stringRep) {
 		this.stringRep = stringRep;
 	}
-	
-	public String toString() { 
-		return stringRep; 
+
+	public String toString() {
+		return stringRep;
 	}
 
 }

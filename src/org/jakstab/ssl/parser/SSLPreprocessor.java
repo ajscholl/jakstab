@@ -2,22 +2,17 @@
 
 	package org.jakstab.ssl.parser;
 
-import antlr.TreeParser;
-import antlr.Token;
-import antlr.collections.AST;
-import antlr.RecognitionException;
-import antlr.ANTLRException;
-import antlr.NoViableAltException;
-import antlr.MismatchedTokenException;
-import antlr.SemanticException;
-import antlr.collections.impl.BitSet;
 import antlr.ASTPair;
+import antlr.MismatchedTokenException;
+import antlr.NoViableAltException;
+import antlr.RecognitionException;
+import antlr.collections.AST;
 import antlr.collections.impl.ASTArray;
+import antlr.collections.impl.BitSet;
+import org.jakstab.rtl.expressions.*;
+import org.jakstab.rtl.statements.*;
 
-	import java.util.*;
-	import org.jakstab.rtl.*;
-	import org.jakstab.rtl.expressions.*;
-	import org.jakstab.rtl.statements.*;
+import java.util.*;
 
 	@SuppressWarnings("all")
 
@@ -30,25 +25,25 @@ public class SSLPreprocessor extends antlr.TreeParser       implements SSLParser
 	private Map<String,SSLFunction> functions = new HashMap<String,SSLFunction>();
 	private Map<String,SSLFunction> instructions = new TreeMap<String,SSLFunction>();
 	private Stack<Map<String,AST>> locals = new Stack<Map<String,AST>>();
-	private SetOfVariables registers = new SetOfVariables(); 
+	private SetOfVariables registers = new SetOfVariables();
 
-	public SetOfVariables getRegisters() { return registers; }	
+	public SetOfVariables getRegisters() { return registers; }
 	//public Map<String,SSLFunction> getFunctions() { return functions; }
 	public Map<String,SSLFunction> getInstructions() { return instructions; }
 
 	public Map<String,List<AST>> getTables() { return tables; }
-	
+
 public SSLPreprocessor() {
 	tokenNames = _tokenNames;
 }
 
 	public final void start(AST _t) throws RecognitionException {
-		
+
 		AST start_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST start_AST = null;
-		
+
 		specification(_t);
 		_t = _retTree;
 		astFactory.addASTChild(currentAST, returnAST);
@@ -56,14 +51,14 @@ public SSLPreprocessor() {
 		returnAST = start_AST;
 		_retTree = _t;
 	}
-	
+
 	public final void specification(AST _t) throws RecognitionException {
-		
+
 		AST specification_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST specification_AST = null;
-		
+
 		AST __t2560 = _t;
 		AST tmp1_AST = null;
 		AST tmp1_AST_in = null;
@@ -87,7 +82,7 @@ public SSLPreprocessor() {
 			else {
 				break _loop2562;
 			}
-			
+
 		} while (true);
 		}
 		currentAST = __currentAST2560;
@@ -97,9 +92,9 @@ public SSLPreprocessor() {
 		returnAST = specification_AST;
 		_retTree = _t;
 	}
-	
+
 	public final void part(AST _t) throws RecognitionException {
-		
+
 		AST part_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -114,13 +109,13 @@ public SSLPreprocessor() {
 		AST fb_AST = null;
 		AST ib = null;
 		AST ib_AST = null;
-		
-				long lv=0; 
-				List<AST> tv; 
-				List<String> pl; 
-				List<SSLInstructionName> inam; 
-			
-		
+
+				long lv=0;
+				List<AST> tv;
+				List<String> pl;
+				List<SSLInstructionName> inam;
+
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case CONSTANT:
@@ -145,9 +140,9 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2564;
 			_t = __t2564;
 			_t = _t.getNextSibling();
-			
+
 						constants.put(cn.getText(), Long.valueOf(lv));
-					
+
 			break;
 		}
 		case REGDECL:
@@ -196,7 +191,7 @@ public SSLPreprocessor() {
 				else {
 					break _loop2568;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2565;
@@ -226,9 +221,9 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2569;
 			_t = __t2569;
 			_t = _t.getNextSibling();
-			
-						tables.put(tn.getText(), tv); 
-					
+
+						tables.put(tn.getText(), tv);
+
 			break;
 		}
 		case FUNCTION:
@@ -285,16 +280,16 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2571;
 			_t = __t2571;
 			_t = _t.getNextSibling();
-			
+
 						for (SSLInstructionName in : inam) {
-			if (in.getVarMap() != null) 
-				locals.push(in.getVarMap()); 
-			else 
+			if (in.getVarMap() != null)
+				locals.push(in.getVarMap());
+			else
 				locals.push(new HashMap<String,AST>());
 			rtl_expand(astFactory.dupTree(ib));
 			locals.pop();
 			AST rtl = getAST();
-			
+
 			if (instructions.containsKey(in.getName())) {
 			SSLFunction oldIns = instructions.get(in.getName());
 			/*                    if (oldpl != old_ip: TODO: JK - Check parameter list
@@ -304,7 +299,7 @@ public SSLPreprocessor() {
 			} else
 			instructions.put(in.getName(), new SSLFunction(in.getName(), pl, rtl));
 						}
-					
+
 			break;
 		}
 		default:
@@ -315,10 +310,10 @@ public SSLPreprocessor() {
 		returnAST = part_AST;
 		_retTree = _t;
 	}
-	
+
 	public final long  const_expr(AST _t) throws RecognitionException {
 		long v=0;
-		
+
 		AST const_expr_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -326,7 +321,7 @@ public SSLPreprocessor() {
 		AST n = null;
 		AST n_AST = null;
 		long l,r;
-		
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case NUM:
@@ -392,9 +387,9 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return v;
 	}
-	
+
 	public final void register_decl(AST _t) throws RecognitionException {
-		
+
 		AST register_decl_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -409,11 +404,11 @@ public SSLPreprocessor() {
 		AST coveredRegTo_AST = null;
 		AST sharedReg = null;
 		AST sharedReg_AST = null;
-		
+
 				int bitWidth; int regIdFrom; int regIdTo; int shareFrom = -1; int shareTo = -1;
 				List<String> regList;
-			
-		
+
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case INDEX:
@@ -431,9 +426,9 @@ public SSLPreprocessor() {
 			_t = _t.getNextSibling();
 			regIdFrom=intValue(_t);
 			_t = _retTree;
-			
+
 							registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(r1.getText(), RTLVariable.UNKNOWN_BITWIDTH));
-					
+
 			break;
 		}
 		case REG_ID:
@@ -544,15 +539,15 @@ public SSLPreprocessor() {
 			}
 			}
 			}
-			
-							if (coveredRegFrom != null) 
+
+							if (coveredRegFrom != null)
 								throw new RuntimeException("COVERS not yet supported!");
 							if (sharedReg != null) {
 								ExpressionFactory.createSharedRegisterVariable(r2.getText(), sharedReg.getText(), shareFrom, shareTo);
 							} else {
 								registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(r2.getText(), bitWidth));
 							}
-						
+
 			break;
 		}
 		case LSQUARE:
@@ -621,11 +616,11 @@ public SSLPreprocessor() {
 			}
 			}
 			}
-			
+
 						for (String regName : regList) {
 							registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(regName, bitWidth));
 						}
-					
+
 			break;
 		}
 		default:
@@ -636,10 +631,10 @@ public SSLPreprocessor() {
 		returnAST = register_decl_AST;
 		_retTree = _t;
 	}
-	
+
 	public final List<AST>  table_expr(AST _t) throws RecognitionException {
 		List<AST> res = null;
-		
+
 		AST table_expr_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -649,7 +644,7 @@ public SSLPreprocessor() {
 		AST n = null;
 		AST n_AST = null;
 		List<AST> h,t;
-		
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case LCURLY:
@@ -666,9 +661,9 @@ public SSLPreprocessor() {
 			_t = _t.getFirstChild();
 			h=table_expr(_t);
 			_t = _retTree;
-			
-				  		res = new LinkedList<AST>(h); /* Copy so we don't change the other table! */ 
-				  	
+
+				  		res = new LinkedList<AST>(h); /* Copy so we don't change the other table! */
+
 			{
 			_loop2584:
 			do {
@@ -681,7 +676,7 @@ public SSLPreprocessor() {
 				else {
 					break _loop2584;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2582;
@@ -707,11 +702,11 @@ public SSLPreprocessor() {
 			{
 			t=table_expr(_t);
 			_t = _retTree;
-			
-						res = new LinkedList<AST>(); 
+
+						res = new LinkedList<AST>();
 						for (AST tt : t) for (AST hh : h)
-							res.add(astFactory.create(NAME, hh.getText() + tt.getText())); 
-					
+							res.add(astFactory.create(NAME, hh.getText() + tt.getText()));
+
 			}
 			currentAST = __currentAST2585;
 			_t = __t2585;
@@ -748,14 +743,14 @@ public SSLPreprocessor() {
 			n_AST = astFactory.create(n);
 			match(_t,NAME);
 			_t = _t.getNextSibling();
-			
-					if (tables.containsKey(n.getText())) 
+
+					if (tables.containsKey(n.getText()))
 						res = tables.get(n.getText());
-					else { res = new LinkedList<AST>(); res.add(n); 
-						/*  lax specification of SSL seems to allow missing quotes? treat as string literal. 
-						   throw new RecognitionException("Undefined table reference " + n.getText() + "!"); */ 
+					else { res = new LinkedList<AST>(); res.add(n);
+						/*  lax specification of SSL seems to allow missing quotes? treat as string literal.
+						   throw new RecognitionException("Undefined table reference " + n.getText() + "!"); */
 					}
-				
+
 			break;
 		}
 		default:
@@ -767,17 +762,17 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return res;
 	}
-	
+
 	public final List<String>  param_list(AST _t) throws RecognitionException {
 		List<String> res = null;
-		
+
 		AST param_list_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST param_list_AST = null;
 		AST n = null;
 		AST n_AST = null;
-		
+
 		AST __t2589 = _t;
 		AST tmp31_AST = null;
 		AST tmp31_AST_in = null;
@@ -804,7 +799,7 @@ public SSLPreprocessor() {
 			else {
 				break _loop2591;
 			}
-			
+
 		} while (true);
 		}
 		currentAST = __currentAST2589;
@@ -814,16 +809,16 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return res;
 	}
-	
+
 	public final List<SSLInstructionName>  instr_name(AST _t) throws RecognitionException {
 		List<SSLInstructionName> res = null;;
-		
+
 		AST instr_name_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST instr_name_AST = null;
 		List<SSLInstructionName> e;
-		
+
 		AST __t2593 = _t;
 		AST tmp32_AST = null;
 		AST tmp32_AST_in = null;
@@ -842,9 +837,9 @@ public SSLPreprocessor() {
 			if ((_t.getType()==NAME||_t.getType()==LSQUARE||_t.getType()==DECOR)) {
 				e=instr_name_elem(_t);
 				_t = _retTree;
-				
+
 								// If this is the first element, set result to this element's return value e.
-								if (res.size() == 0) 
+								if (res.size() == 0)
 									res = e;
 								// Otherwise, do a cross product of the previous result with e
 								else {
@@ -856,15 +851,15 @@ public SSLPreprocessor() {
 					        if (rhsIn.getVarMap() != null) newMap.putAll(rhsIn.getVarMap());
 					                        tmp.add(new SSLInstructionName(lhsIn.getName() + rhsIn.getName(), newMap));
 					            }
-					    } 
+					    }
 					res = tmp;
 								}
-							
+
 			}
 			else {
 				break _loop2595;
 			}
-			
+
 		} while (true);
 		}
 		currentAST = __currentAST2593;
@@ -874,17 +869,17 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return res;
 	}
-	
+
 	public final int  intValue(AST _t) throws RecognitionException {
 		 int value = -1; ;
-		
+
 		AST intValue_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST intValue_AST = null;
 		AST number = null;
 		AST number_AST = null;
-		
+
 		number = (AST)_t;
 		AST number_AST_in = null;
 		number_AST = astFactory.create(number);
@@ -897,10 +892,10 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return value;
 	}
-	
+
 	public final List<String>  register_list(AST _t) throws RecognitionException {
 		List<String> res = new LinkedList<String>();
-		
+
 		AST register_list_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -909,7 +904,7 @@ public SSLPreprocessor() {
 		AST r_AST = null;
 		AST rn = null;
 		AST rn_AST = null;
-		
+
 		r = (AST)_t;
 		AST r_AST_in = null;
 		r_AST = astFactory.create(r);
@@ -931,17 +926,17 @@ public SSLPreprocessor() {
 			else {
 				break _loop2577;
 			}
-			
+
 		} while (true);
 		}
 		returnAST = register_list_AST;
 		_retTree = _t;
 		return res;
 	}
-	
+
 	public final List<SSLInstructionName>  instr_name_elem(AST _t) throws RecognitionException {
 		List<SSLInstructionName> res = null;;
-		
+
 		AST instr_name_elem_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -956,11 +951,11 @@ public SSLPreprocessor() {
 		AST tidx_AST = null;
 		AST d = null;
 		AST d_AST = null;
-		
+
 			res = new LinkedList<SSLInstructionName>();
 			List<AST> table = null;
-		
-		
+
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case NAME:
@@ -970,9 +965,9 @@ public SSLPreprocessor() {
 			name_AST = astFactory.create(name);
 			match(_t,NAME);
 			_t = _t.getNextSibling();
-				
-						res.add(new SSLInstructionName(name.getText())); 
-					
+
+						res.add(new SSLInstructionName(name.getText()));
+
 			break;
 		}
 		case LSQUARE:
@@ -992,11 +987,11 @@ public SSLPreprocessor() {
 			tname_AST = astFactory.create(tname);
 			match(_t,NAME);
 			_t = _t.getNextSibling();
-			
-			if (tables.containsKey(tname.getText())) 
+
+			if (tables.containsKey(tname.getText()))
 				table = tables.get(tname.getText());
 						else throw new RecognitionException("Undefined table: "+ tname.getText());
-					
+
 			{
 			if (_t==null) _t=ASTNULL;
 			switch ( _t.getType()) {
@@ -1007,15 +1002,15 @@ public SSLPreprocessor() {
 				vname_AST = astFactory.create(vname);
 				match(_t,NAME);
 				_t = _t.getNextSibling();
-				
+
 								int i = 0;
 								for (AST tableEntry : table) {
-									Map<String,AST>  curVars = new HashMap<String,AST> (); 
+									Map<String,AST>  curVars = new HashMap<String,AST> ();
 									curVars.put(vname.getText(), (AST)astFactory.make( (new ASTArray(1)).add(astFactory.create(NUM,Integer.toString(i)))));
 									res.add(new SSLInstructionName(tableEntry.getText(), curVars));
 									i++;
 								}
-							
+
 				break;
 			}
 			case NUM:
@@ -1025,12 +1020,12 @@ public SSLPreprocessor() {
 				tidx_AST = astFactory.create(tidx);
 				match(_t,NUM);
 				_t = _t.getNextSibling();
-				
+
 								int index = Integer.parseInt(tidx.getText());
 					if (index < table.size()) {
-						res.add(new SSLInstructionName(table.get(index).getText())); 
+						res.add(new SSLInstructionName(table.get(index).getText()));
 					} else throw new RecognitionException("Index " + index + " out of bounds for table " + tname.getText() + "!");
-							
+
 				break;
 			}
 			default:
@@ -1051,9 +1046,9 @@ public SSLPreprocessor() {
 			d_AST = astFactory.create(d);
 			match(_t,DECOR);
 			_t = _t.getNextSibling();
-			
-						res.add(new SSLInstructionName('.' + d.getText().substring(1))); 
-					
+
+						res.add(new SSLInstructionName('.' + d.getText().substring(1)));
+
 			break;
 		}
 		default:
@@ -1065,9 +1060,9 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return res;
 	}
-	
+
 	public final void rtl_expand(AST _t) throws RecognitionException {
-		
+
 		AST rtl_expand_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -1092,7 +1087,7 @@ public SSLPreprocessor() {
 		AST fname_AST = null;
 		AST farg_AST = null;
 		AST farg = null;
-		
+
 		if (_t==null) _t=ASTNULL;
 		if ((_t.getType()==RTL)) {
 			AST __t2600 = _t;
@@ -1121,19 +1116,19 @@ public SSLPreprocessor() {
 					_t = _retTree;
 					rt_AST = (AST)returnAST;
 					rtl_expand_AST = (AST)currentAST.root;
-					
+
 					// do not nest RTL blocks
 					if (rt != null && rt.getType() == RTL) {
 					if (rt.getFirstChild() != null)
 					rtl_expand_AST.addChild(rt.getFirstChild());
 					} else
 					rtl_expand_AST.addChild(rt_AST);
-								
+
 				}
 				else {
 					break _loop2602;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2600;
@@ -1147,7 +1142,7 @@ public SSLPreprocessor() {
 			match(_t,NAME);
 			_t = _t.getNextSibling();
 			rtl_expand_AST = (AST)currentAST.root;
-			
+
 			String s = name_AST.getText();
 			if (locals.peek().containsKey(s))
 			rtl_expand_AST = astFactory.dupTree(locals.peek().get(s));
@@ -1155,7 +1150,7 @@ public SSLPreprocessor() {
 			rtl_expand_AST = astFactory.create(NUM, Long.toString(constants.get(s)));
 			else
 			rtl_expand_AST = astFactory.dupTree(name_AST);
-					
+
 			currentAST.root = rtl_expand_AST;
 			currentAST.child = rtl_expand_AST!=null &&rtl_expand_AST.getFirstChild()!=null ?
 				rtl_expand_AST.getFirstChild() : rtl_expand_AST;
@@ -1185,12 +1180,12 @@ public SSLPreprocessor() {
 			_t = __t2603;
 			_t = _t.getNextSibling();
 			rtl_expand_AST = (AST)currentAST.root;
-			
+
 			List<AST> table = tables.get(etname_AST.getText());
 			int index = Integer.parseInt(etindex_AST.getText());
 			AST expr = table.get(index);
 			rtl_expand_AST = astFactory.dupTree(expr);
-					
+
 			currentAST.root = rtl_expand_AST;
 			currentAST.child = rtl_expand_AST!=null &&rtl_expand_AST.getFirstChild()!=null ?
 				rtl_expand_AST.getFirstChild() : rtl_expand_AST;
@@ -1228,13 +1223,13 @@ public SSLPreprocessor() {
 			_t = __t2604;
 			_t = _t.getNextSibling();
 			rtl_expand_AST = (AST)currentAST.root;
-			
+
 			List <AST> table = tables.get(otname_AST.getText());
 			int index = Integer.parseInt(otindex_AST.getText());
 			AST op = table.get(index);
 			op = astFactory.dupTree(op);
 			rtl_expand_AST = (AST)astFactory.make( (new ASTArray(3)).add(op).add(lexpr_AST).add(rexpr_AST));
-					
+
 			currentAST.root = rtl_expand_AST;
 			currentAST.child = rtl_expand_AST!=null &&rtl_expand_AST.getFirstChild()!=null ?
 				rtl_expand_AST.getFirstChild() : rtl_expand_AST;
@@ -1271,14 +1266,14 @@ public SSLPreprocessor() {
 				else {
 					break _loop2607;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2605;
 			_t = __t2605;
 			_t = _t.getNextSibling();
 			rtl_expand_AST = (AST)currentAST.root;
-			
+
 			SSLFunction f = functions.get(fname.getText());
 						Map<String,AST> assignment = new HashMap<String,AST>();
 						for (int i=0; i<f.getParameterCount(); i++)
@@ -1287,7 +1282,7 @@ public SSLPreprocessor() {
 			rtl_expand(f.getAST());
 			rtl_expand_AST = this.getAST();
 			locals.pop();
-					
+
 			currentAST.root = rtl_expand_AST;
 			currentAST.child = rtl_expand_AST!=null &&rtl_expand_AST.getFirstChild()!=null ?
 				rtl_expand_AST.getFirstChild() : rtl_expand_AST;
@@ -1317,7 +1312,7 @@ public SSLPreprocessor() {
 				else {
 					break _loop2610;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2608;
@@ -1328,14 +1323,14 @@ public SSLPreprocessor() {
 		else {
 			throw new NoViableAltException(_t);
 		}
-		
+
 		returnAST = rtl_expand_AST;
 		_retTree = _t;
 	}
-	
+
 	public final StatementSequence  convertToRTL(AST _t) throws RecognitionException {
 		 StatementSequence statements = new StatementSequence(); ;
-		
+
 		AST convertToRTL_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -1344,14 +1339,14 @@ public SSLPreprocessor() {
 		AST type_AST = null;
 		AST other = null;
 		AST other_AST = null;
-		
-			RTLExpression lhs = null; 
+
+			RTLExpression lhs = null;
 			RTLExpression rhs = null;
-			RTLExpression cnt = null; 
+			RTLExpression cnt = null;
 			StatementSequence subStatements = null;
 			int bitWidth = -1;
-		
-		
+
+
 		if (_t==null) _t=ASTNULL;
 		if ((_t.getType()==RTL)) {
 			AST __t2612 = _t;
@@ -1376,7 +1371,7 @@ public SSLPreprocessor() {
 				else {
 					break _loop2614;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2612;
@@ -1393,7 +1388,7 @@ public SSLPreprocessor() {
 			currentAST.child = null;
 			match(_t,ASSIGNTYPE);
 			_t = _t.getFirstChild();
-			
+
 						assert type != null : "Matched null assign type";
 						String aType = type.getText();
 						assert aType.length() >=3 : "Parsed assign type which has less than 3 characters";
@@ -1402,7 +1397,7 @@ public SSLPreprocessor() {
 						// Cut off 'f' from float assigntypes
 						if (aType.startsWith("f")) aType = aType.substring(1);
 						bitWidth = Integer.parseInt(aType);
-					
+
 			lhs=rtlExpr(_t,bitWidth);
 			_t = _retTree;
 			rhs=rtlExpr(_t,-bitWidth);
@@ -1410,10 +1405,10 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2615;
 			_t = __t2615;
 			_t = _t.getNextSibling();
-			
+
 					statements.addFirst(new AssignmentTemplate(bitWidth, (Writable)lhs, rhs));
 					//System.out.println("Got assigntype!" + statements.toString());
-				
+
 		}
 		else if ((_t.getType()==LITERAL_MEMSET)) {
 			AST __t2616 = _t;
@@ -1433,9 +1428,9 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2616;
 			_t = __t2616;
 			_t = _t.getNextSibling();
-			
+
 					statements.addFirst(new RTLMemset(lhs, rhs, cnt));
-				
+
 		}
 		else if ((_t.getType()==LITERAL_MEMCPY)) {
 			AST __t2617 = _t;
@@ -1455,9 +1450,9 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2617;
 			_t = __t2617;
 			_t = _t.getNextSibling();
-			
+
 					statements.addFirst(new RTLMemcpy(lhs, rhs, cnt));
-				
+
 		}
 		else if (((_t.getType() >= SEMI && _t.getType() <= DOT))) {
 			AST __t2618 = _t;
@@ -1481,33 +1476,33 @@ public SSLPreprocessor() {
 				else {
 					break _loop2620;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2618;
 			_t = __t2618;
 			_t = _t.getNextSibling();
-			
+
 					if (other.getText().equals("halt")) {
 						statements.addFirst(new RTLHalt());
-					} 
-					else statements.addFirst(new RTLSkip()); 
-				
+					}
+					else statements.addFirst(new RTLSkip());
+
 		}
 		else {
 			throw new NoViableAltException(_t);
 		}
-		
+
 		returnAST = convertToRTL_AST;
 		_retTree = _t;
 		return statements;
 	}
-	
+
 	public final RTLExpression  rtlExpr(AST _t,
 		int bw
 	) throws RecognitionException {
 		 RTLExpression ret = null;;
-		
+
 		AST rtlExpr_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
@@ -1516,15 +1511,15 @@ public SSLPreprocessor() {
 		AST vname_AST = null;
 		AST rname = null;
 		AST rname_AST = null;
-		
+
 			RTLExpression e1 = null, e2 = null, e3 = null;
 			RTLExpression[] exprList = new RTLExpression[5]; // Needed for the BUILTIN-rule
-			int i = 0; // counter 
-			int n1 = -1, n2 = -1; 
+			int i = 0; // counter
+			int n1 = -1, n2 = -1;
 			double f1 = Double.NaN;
-			String str = null; 
-		
-		
+			String str = null;
+
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case EQ:
@@ -2199,7 +2194,7 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2652;
 			_t = __t2652;
 			_t = _t.getNextSibling();
-			ret = ExpressionFactory.createDivide(e1, e2);
+			ret = ExpressionFactory.createUDivide(e1, e2);
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -2303,7 +2298,7 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2656;
 			_t = __t2656;
 			_t = _t.getNextSibling();
-			ret = ExpressionFactory.createDivide(e1, e2);
+			ret = ExpressionFactory.createSDivide(e1, e2);
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -2329,7 +2324,7 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2657;
 			_t = __t2657;
 			_t = _t.getNextSibling();
-			ret = ExpressionFactory.createModulo(e1, e2);
+			ret = ExpressionFactory.createUModulo(e1, e2);
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -2355,7 +2350,7 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2658;
 			_t = __t2658;
 			_t = _t.getNextSibling();
-			ret = ExpressionFactory.createModulo(e1, e2);
+			ret = ExpressionFactory.createSModulo(e1, e2);
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -2931,10 +2926,10 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2679;
 			_t = __t2679;
 			_t = _t.getNextSibling();
-			
+
 						//ret = ExpressionFactory.createCast(e1, ExpressionFactory.createNumber(n1, RTLVariable.UNKNOWN_BITWIDTH));
 						ret = e1;
-						
+
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -3025,21 +3020,21 @@ public SSLPreprocessor() {
 				else {
 					break _loop2684;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2682;
 			_t = __t2682;
 			_t = _t.getNextSibling();
-			
+
 						  	if (str.equals("sgnex")) ret = ExpressionFactory.createSignExtend(exprList[0], exprList[1], exprList[2]);
 						  	else if (str.equals("zfill")) ret = ExpressionFactory.createZeroFill(exprList[0], exprList[1], exprList[2]);
 						  	else if (str.equals("fsize")) ret = ExpressionFactory.createFloatResize(exprList[0], exprList[1], exprList[2]);
 						  	// temporary solution until real float support
 						  	else if (str.equals("ftoi")) ret = ExpressionFactory.createFloatResize(exprList[0], exprList[1], exprList[2]);
 						  	else if (str.equals("itof")) ret = ExpressionFactory.createFloatResize(exprList[0], exprList[1], exprList[2]);
-							else ret = ExpressionFactory.createSpecialExpression(str, exprList); 
-						
+							else ret = ExpressionFactory.createSpecialExpression(str, exprList);
+
 			rtlExpr_AST = (AST)currentAST.root;
 			break;
 		}
@@ -3052,23 +3047,23 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return ret;
 	}
-	
+
 	public final Map<RTLExpression,RTLExpression>  convertSimplificationTemplates(AST _t) throws RecognitionException {
 		 Map<RTLExpression,RTLExpression> mapping = new HashMap<RTLExpression,RTLExpression>();
-		
+
 		AST convertSimplificationTemplates_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST convertSimplificationTemplates_AST = null;
 		AST type = null;
 		AST type_AST = null;
-		
-			RTLExpression lhs = null; 
+
+			RTLExpression lhs = null;
 			RTLExpression rhs = null;
 			int bitWidth = -1;
 			Map<RTLExpression,RTLExpression> subMap = null;
-		
-		
+
+
 		if (_t==null) _t=ASTNULL;
 		switch ( _t.getType()) {
 		case RTL:
@@ -3095,7 +3090,7 @@ public SSLPreprocessor() {
 				else {
 					break _loop2624;
 				}
-				
+
 			} while (true);
 			}
 			currentAST = __currentAST2622;
@@ -3121,9 +3116,9 @@ public SSLPreprocessor() {
 			currentAST = __currentAST2625;
 			_t = __t2625;
 			_t = _t.getNextSibling();
-			
+
 					mapping.put(lhs, rhs);
-				
+
 			break;
 		}
 		default:
@@ -3135,17 +3130,17 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return mapping;
 	}
-	
+
 	public final double  floatValue(AST _t) throws RecognitionException {
 		 double value = -1; ;
-		
+
 		AST floatValue_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST floatValue_AST = null;
 		AST number = null;
 		AST number_AST = null;
-		
+
 		number = (AST)_t;
 		AST number_AST_in = null;
 		number_AST = astFactory.create(number);
@@ -3158,17 +3153,17 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return value;
 	}
-	
+
 	public final String  nameValue(AST _t) throws RecognitionException {
 		 String value = null; ;
-		
+
 		AST nameValue_AST_in = (_t == ASTNULL) ? null : (AST)_t;
 		returnAST = null;
 		ASTPair currentAST = new ASTPair();
 		AST nameValue_AST = null;
 		AST str = null;
 		AST str_AST = null;
-		
+
 		str = (AST)_t;
 		AST str_AST_in = null;
 		str_AST = astFactory.create(str);
@@ -3181,8 +3176,8 @@ public SSLPreprocessor() {
 		_retTree = _t;
 		return value;
 	}
-	
-	
+
+
 	public static final String[] _tokenNames = {
 		"<0>",
 		"EOF",
@@ -3299,7 +3294,7 @@ public SSLPreprocessor() {
 		"ASSIGNTYPE_OR_MUL",
 		"DOT"
 	};
-	
+
 	private static final long[] mk_tokenSet_0() {
 		long[] data = { 0L, 1128502657024L, 0L, 0L};
 		return data;
@@ -3316,4 +3311,4 @@ public SSLPreprocessor() {
 	}
 	public static final BitSet _tokenSet_2 = new BitSet(mk_tokenSet_2());
 	}
-	
+

@@ -1,12 +1,12 @@
 /*
  * SSL.g - This file is part of the Jakstab project.
- * 
+ *
  * Copyright 2007-2015 Johannes Kinder <jk@jakstab.org>
  * Copyright 2006 Jose Fonseca
  *
  * The original grammar was taken from the IDC - Interactive Decompiler
- * project by J. Fonseca. It was ported to Java and heavily modified 
- * for use with Jakstab by J. Kinder. 
+ * project by J. Fonseca. It was ported to Java and heavily modified
+ * for use with Jakstab by J. Kinder.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -27,8 +27,8 @@
  * ANTLR grammar for the Semantics Specification Language (SSL)
  *
  * Based on
- *  C. Cifuentes and S. Sendall. Specifying the semantics of machine instructions. 
- *  In Proc. Int'l Workshop on Program Comprehension, pp. 126-133, Ischia, Italy, 
+ *  C. Cifuentes and S. Sendall. Specifying the semantics of machine instructions.
+ *  In Proc. Int'l Workshop on Program Comprehension, pp. 126-133, Ischia, Italy,
  *  24-26 June 1998, IEEE Computer Society.
  * and on the files:
  * sslscanner.l and sslparser.y from UQBT source distribution.
@@ -70,13 +70,13 @@ specification
 	;
 
 part
-	: const_def	
-	| registers_decl 
-	| operands_decl	
-	| endianness	
-	| function_def 
-	| table_def	
-	| instr_def	
+	: const_def
+	| registers_decl
+	| operands_decl
+	| endianness
+	| function_def
+	| table_def
+	| instr_def
 	| fast_list
 	;
 
@@ -372,9 +372,9 @@ COMMENT
 protected DIGITS:	('0'..'9')+	;
 protected HEXDIGITS: ('0'..'9'|'A'..'F'|'a'..'f')+;
 
-protected NUM	
+protected NUM
 	{boolean positive = true; java.math.BigInteger v=null;}
-	:  
+	:
 		(
 		|'-'! { positive=false; }
 		)
@@ -559,14 +559,14 @@ options {
 	private Map<String,SSLFunction> functions = new HashMap<String,SSLFunction>();
 	private Map<String,SSLFunction> instructions = new TreeMap<String,SSLFunction>();
 	private Stack<Map<String,AST>> locals = new Stack<Map<String,AST>>();
-	private SetOfVariables registers = new SetOfVariables(); 
+	private SetOfVariables registers = new SetOfVariables();
 
-	public SetOfVariables getRegisters() { return registers; }	
+	public SetOfVariables getRegisters() { return registers; }
 	//public Map<String,SSLFunction> getFunctions() { return functions; }
 	public Map<String,SSLFunction> getInstructions() { return instructions; }
 
 	public Map<String,List<AST>> getTables() { return tables; }
-	
+
 }
 
 start
@@ -581,27 +581,27 @@ specification
 /*
  * Parses a syntactic element of an SSL specification file.
  */
-part  { 
-		long lv=0; 
-		List<AST> tv; 
-		List<String> pl; 
-		List<SSLInstructionName> inam; 
-	} 
+part  {
+		long lv=0;
+		List<AST> tv;
+		List<String> pl;
+		List<SSLInstructionName> inam;
+	}
 	: !#(CONSTANT cn:NAME lv=const_expr) {
 			constants.put(cn.getText(), Long.valueOf(lv));
 		}
 	|! #(REGDECL ("INTEGER" | "FLOAT") (register_decl)*)
-	|! #(TABLE tn:NAME tv=table_expr) { 
-			tables.put(tn.getText(), tv); 
+	|! #(TABLE tn:NAME tv=table_expr) {
+			tables.put(tn.getText(), tv);
 		}
 	|! #(FUNCTION fn:NAME pl=param_list fb:RTL)
 		{ functions.put(fn.getText(), new SSLFunction(fn.getText(), pl, astFactory.dupTree(fb))); }
 	|! #(INSTR inam=instr_name pl=param_list ib:RTL)
 		{
 			for (SSLInstructionName in : inam) {
-                if (in.getVarMap() != null) 
-                	locals.push(in.getVarMap()); 
-                else 
+                if (in.getVarMap() != null)
+                	locals.push(in.getVarMap());
+                else
                 	locals.push(new HashMap<String,AST>());
                 rtl_expand(astFactory.dupTree(ib));
                 locals.pop();
@@ -620,7 +620,7 @@ part  {
 //	| #( . ( . )* )
 		// copy other parts unmodified
 	;
-	
+
 register_decl! {
 		int bitWidth; int regIdFrom; int regIdTo; int shareFrom = -1; int shareTo = -1;
 		List<String> regList;
@@ -629,12 +629,12 @@ register_decl! {
 		INDEX r1:REG_ID regIdFrom=intValue {
 				registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(r1.getText(), RTLVariable.UNKNOWN_BITWIDTH));
 		}
-		
+
 		| r2:REG_ID LSQUARE bitWidth=intValue RSQUARE INDEX regIdFrom=intValue
 			( "COVERS" coveredRegFrom:REG_ID TO coveredRegTo:REG_ID
 				| "SHARES" sharedReg:REG_ID AT LSQUARE shareFrom=intValue TO shareTo=intValue RSQUARE
 			)? {
-				if (coveredRegFrom != null) 
+				if (coveredRegFrom != null)
 					throw new RuntimeException("COVERS not yet supported!");
 				if (sharedReg != null) {
 					ExpressionFactory.createSharedRegisterVariable(r2.getText(), sharedReg.getText(), shareFrom, shareTo);
@@ -642,7 +642,7 @@ register_decl! {
 					registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(r2.getText(), bitWidth));
 				}
 			}
-		
+
 		| LSQUARE regList=register_list RSQUARE LSQUARE bitWidth=intValue RSQUARE INDEX regIdFrom=intValue (TO regIdTo=intValue)? {
 			for (String regName : regList) {
 				registers.add((RTLVariable)ExpressionFactory.createRegisterVariable(regName, bitWidth));
@@ -673,31 +673,31 @@ const_expr! returns [long v=0]
  */
 table_expr! returns [List<AST> res = null]
 { List<AST> h,t; }
-	: 
+	:
 	/* A curly bracketed list of elements can contain other table references */
 	  #( LCURLY h=table_expr {
-	  		res = new LinkedList<AST>(h); /* Copy so we don't change the other table! */ 
+	  		res = new LinkedList<AST>(h); /* Copy so we don't change the other table! */
 	  	} (t=table_expr { res.addAll(t); })* )
 	/* The cross product of two tables */
 	| #( CROSSP h=table_expr { res = h; } (t=table_expr {
-			res = new LinkedList<AST>(); 
+			res = new LinkedList<AST>();
 			for (AST tt : t) for (AST hh : h)
-				res.add(astFactory.create(NAME, hh.getText() + tt.getText())); 
+				res.add(astFactory.create(NAME, hh.getText() + tt.getText()));
 		}) )
 	| #( QUOTE any:. ) { res = new LinkedList<AST>(); res.add(astFactory.dupTree(any)); }
-	| n:NAME { 
-		if (tables.containsKey(n.getText())) 
+	| n:NAME {
+		if (tables.containsKey(n.getText()))
 			res = tables.get(n.getText());
-		else { res = new LinkedList<AST>(); res.add(n); 
-			/*  lax specification of SSL seems to allow missing quotes? treat as string literal. 
-			   throw new RecognitionException("Undefined table reference " + n.getText() + "!"); */ 
+		else { res = new LinkedList<AST>(); res.add(n);
+			/*  lax specification of SSL seems to allow missing quotes? treat as string literal.
+			   throw new RecognitionException("Undefined table reference " + n.getText() + "!"); */
 		}
 	  }
 	;
-	
-	
+
+
 /*
- * Parses comma separated parameters into a list of Strings. 
+ * Parses comma separated parameters into a list of Strings.
  */
 param_list! returns [List<String> res = null]
 	: #(COMMA { res = new LinkedList<String>(); } ( n:NAME { res.add(n.getText()); } )* )
@@ -720,7 +720,7 @@ instr_name! returns [List<SSLInstructionName> res = null;]
 		( e=instr_name_elem
 			{
 				// If this is the first element, set result to this element's return value e.
-				if (res.size() == 0) 
+				if (res.size() == 0)
 					res = e;
 				// Otherwise, do a cross product of the previous result with e
 				else {
@@ -732,7 +732,7 @@ instr_name! returns [List<SSLInstructionName> res = null;]
                 	        if (rhsIn.getVarMap() != null) newMap.putAll(rhsIn.getVarMap());
 	                        tmp.add(new SSLInstructionName(lhsIn.getName() + rhsIn.getName(), newMap));
         	            }
-            	    } 
+            	    }
                 	res = tmp;
 				}
 			}
@@ -743,32 +743,32 @@ instr_name! returns [List<SSLInstructionName> res = null;]
 
 /*
  * Parses an element of an instruction name containing a single table lookup.
- * Returns a list of ('name', 'variables') pairs, where 'name' is the part of 
- * the name that is already resolved, and where 'variables' is a dict mapping 
+ * Returns a list of ('name', 'variables') pairs, where 'name' is the part of
+ * the name that is already resolved, and where 'variables' is a dict mapping
  * the corresponding variables/values resulting from table lookup.
  */
 instr_name_elem! returns [List<SSLInstructionName> res = null;]
-{ 
+{
 	res = new LinkedList<SSLInstructionName>();
 	List<AST> table = null;
 }
 	: name:NAME
-		{ 	
-			res.add(new SSLInstructionName(name.getText())); 
+		{
+			res.add(new SSLInstructionName(name.getText()));
 		}
 //	| PRIME optname:NAME
 //		{ res = [("", {}), (#optname.getText(), {})] }
 	| #(LSQUARE tname:NAME
 		{
-            if (tables.containsKey(tname.getText())) 
+            if (tables.containsKey(tname.getText()))
             	table = tables.get(tname.getText());
 			else throw new RecognitionException("Undefined table: "+ tname.getText());
 		}
 		( vname:NAME
-			{ 
+			{
 				int i = 0;
 				for (AST tableEntry : table) {
-					Map<String,AST>  curVars = new HashMap<String,AST> (); 
+					Map<String,AST>  curVars = new HashMap<String,AST> ();
 					curVars.put(vname.getText(), #(#[NUM, Integer.toString(i)]));
 					res.add(new SSLInstructionName(tableEntry.getText(), curVars));
 					i++;
@@ -778,13 +778,13 @@ instr_name_elem! returns [List<SSLInstructionName> res = null;]
 			{
 				int index = Integer.parseInt(tidx.getText());
             	if (index < table.size()) {
-            		res.add(new SSLInstructionName(table.get(index).getText())); 
+            		res.add(new SSLInstructionName(table.get(index).getText()));
             	} else throw new RecognitionException("Index " + index + " out of bounds for table " + tname.getText() + "!");
 			}
 		))
 	| d:DECOR
-		{ 
-			res.add(new SSLInstructionName('.' + d.getText().substring(1))); 
+		{
+			res.add(new SSLInstructionName('.' + d.getText().substring(1)));
 		}
 	;
 
@@ -855,18 +855,18 @@ rtl_expand
 
 
 convertToRTL returns [ StatementSequence statements = new StatementSequence(); ]
-{ 
-	RTLExpression lhs = null; 
+{
+	RTLExpression lhs = null;
 	RTLExpression rhs = null;
-	RTLExpression cnt = null; 
+	RTLExpression cnt = null;
 	StatementSequence subStatements = null;
 	int bitWidth = -1;
 }
 	:
 	/* Combine everything under an RTL node*/
-	  ! #( RTL (subStatements=convertToRTL { statements.addLast(subStatements); } )* )	
-	/* Almost all statements are assignments */ 
-	| ! #( type:ASSIGNTYPE { 
+	  ! #( RTL (subStatements=convertToRTL { statements.addLast(subStatements); } )* )
+	/* Almost all statements are assignments */
+	| ! #( type:ASSIGNTYPE {
 			assert type != null : "Matched null assign type";
 			String aType = type.getText();
 			assert aType.length() >=3 : "Parsed assign type which has less than 3 characters";
@@ -883,43 +883,43 @@ convertToRTL returns [ StatementSequence statements = new StatementSequence(); ]
 		//System.out.println("Got assigntype!" + statements.toString());
 	}
 	| ! #( "MEMSET" { bitWidth = constants.get("ADDRESSBITS").intValue(); }
-		lhs=rtlExpr[bitWidth] rhs=rtlExpr[RTLVariable.UNKNOWN_BITWIDTH] cnt=rtlExpr[bitWidth] 
+		lhs=rtlExpr[bitWidth] rhs=rtlExpr[RTLVariable.UNKNOWN_BITWIDTH] cnt=rtlExpr[bitWidth]
 		)
 	{
 		statements.addFirst(new RTLMemset(lhs, rhs, cnt));
-	}  
+	}
 	| ! #( "MEMCPY" { bitWidth = constants.get("ADDRESSBITS").intValue(); }
-		lhs=rtlExpr[bitWidth] rhs=rtlExpr[bitWidth] cnt=rtlExpr[bitWidth] 
+		lhs=rtlExpr[bitWidth] rhs=rtlExpr[bitWidth] cnt=rtlExpr[bitWidth]
 		)
 	{
 		statements.addFirst(new RTLMemcpy(lhs, rhs, cnt));
-	}  
+	}
 	/* Make FPUSH, FPOP, and anything else RTLDirectives by default */
 	// | ! #(other:. (.)* ) { statements.addFirst(new RTLDirective(other.getText())); }
-	// Turn it to skips. Directives were ignored all the time anyway and were only used for FPUSH and FPOP 
+	// Turn it to skips. Directives were ignored all the time anyway and were only used for FPUSH and FPOP
 	| ! #(other:. (.)* ) {
 		if (other.getText().equals("halt")) {
 			statements.addFirst(new RTLHalt());
-		} 
-		else statements.addFirst(new RTLSkip()); 
-	} 
+		}
+		else statements.addFirst(new RTLSkip());
+	}
 ;
 
-/*		
+/*
 	Missing suffix:		PRIME^ // prime suffix (whatever that means))
 */
-		
+
 convertSimplificationTemplates returns [ Map<RTLExpression,RTLExpression> mapping = new HashMap<RTLExpression,RTLExpression>()]
 {
-	RTLExpression lhs = null; 
+	RTLExpression lhs = null;
 	RTLExpression rhs = null;
 	int bitWidth = -1;
 	Map<RTLExpression,RTLExpression> subMap = null;
 }
 	:
 	/* Combine everything under an RTL node*/
-	  ! #( RTL (subMap=convertSimplificationTemplates { mapping.putAll(subMap); } )* )	
-	/* Almost all statements are assignments */ 
+	  ! #( RTL (subMap=convertSimplificationTemplates { mapping.putAll(subMap); } )* )
+	/* Almost all statements are assignments */
     | ! #( type:ASSIGNTYPE lhs=rtlExpr[RTLVariable.UNKNOWN_BITWIDTH] rhs=rtlExpr[RTLVariable.UNKNOWN_BITWIDTH] ) {
 		mapping.put(lhs, rhs);
 	}
@@ -927,16 +927,16 @@ convertSimplificationTemplates returns [ Map<RTLExpression,RTLExpression> mappin
 
 
 rtlExpr[int bw] returns [ RTLExpression ret = null;]
-{   
+{
 	RTLExpression e1 = null, e2 = null, e3 = null;
 	RTLExpression[] exprList = new RTLExpression[5]; // Needed for the BUILTIN-rule
-	int i = 0; // counter 
-	int n1 = -1, n2 = -1; 
+	int i = 0; // counter
+	int n1 = -1, n2 = -1;
 	double f1 = Double.NaN;
-	String str = null; 
+	String str = null;
 }
 	:
-		// Test operators 
+		// Test operators
 		#( EQ e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createEqual(e1, e2); }
 		| #( NE e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createNotEqual(e1, e2); }
 		| #( GT e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createGreaterThan(e1, e2); }
@@ -963,13 +963,15 @@ rtlExpr[int bw] returns [ RTLExpression ret = null;]
 		| #( MUL_FSD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createFloatMultiply(e1, e2); }
 		| #( MUL_FDQ e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createFloatMultiply(e1, e2); }
 		| #( SMUL e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createMultiply(e1, e2); }
-		| #( DIV e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createDivide(e1, e2); }
+		| #( DIV e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createUDivide(e1, e2); }
 		| #( DIV_F e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createFloatDivide(e1, e2); }
 		| #( DIV_FD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createFloatDivide(e1, e2); }
 		| #( DIV_FQ e1=rtlExpr[bw] e2=rtlExpr[bw]) { ret = ExpressionFactory.createFloatDivide(e1, e2); }
-		| #( SDIV e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createDivide(e1, e2); }
+		| #( SDIV e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createSDivide(e1, e2); }
 		| #( MOD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createModulo(e1, e2); }
+		| #( MOD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createUModulo(e1, e2); }
 		| #( SMOD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createModulo(e1, e2); }
+		| #( SMOD e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createSModulo(e1, e2); }
 		| #( "pow" e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createPowerOf(e1, e2); }
 		// Logcical operators
 		| #( AND e1=rtlExpr[bw] e2=rtlExpr[bw] ) { ret = ExpressionFactory.createAnd(e1, e2); }
@@ -1001,19 +1003,19 @@ rtlExpr[int bw] returns [ RTLExpression ret = null;]
 		| #( MEM_IDX e1=rtlExpr[-Math.abs(bw)] ) { ret = ExpressionFactory.createMemoryLocation(e1, (bw!=0 ? Math.abs(bw) : RTLVariable.UNKNOWN_BITWIDTH)); }
 		// Cast
 		// this is now turned around in the parser to allow bitwidth inference - simply set bitwidth to the cast value
-		| #( CAST n1=intValue e1=rtlExpr[n1] ) { 
+		| #( CAST n1=intValue e1=rtlExpr[n1] ) {
 			//ret = ExpressionFactory.createCast(e1, ExpressionFactory.createNumber(n1, RTLVariable.UNKNOWN_BITWIDTH));
 			ret = e1;
 			}
-		// Sign Extension -- I never saw this operator (!) in use... sign extension now refers to sgnex() 
+		// Sign Extension -- I never saw this operator (!) in use... sign extension now refers to sgnex()
 		//| #( S_E e1=rtlExpr[bw] ) { ret = ExpressionFactory.createOperation(Operator.SIGN_EXTEND, e1); }
 		// Bit index - We don't know anything about the width of the operand.
 		| #( AT e1=rtlExpr[0] e2=rtlExpr[0] e3=rtlExpr[0] ) { ret = ExpressionFactory.createBitRange(e1, e2, e3); }
 		// Conditional
 		| #( QUEST e1=rtlExpr[bw] e2=rtlExpr[bw] e3=rtlExpr[bw] ) { ret = ExpressionFactory.createConditionalExpression(e1, e2, e3); }
-		// Builtin functions 
+		// Builtin functions
 		| #( BUILTIN str=nameValue (
-				 e1=rtlExpr[bw] { exprList[i++] = e1; }  
+				 e1=rtlExpr[bw] { exprList[i++] = e1; }
 			  )* )	{
 			  	if (str.equals("sgnex")) ret = ExpressionFactory.createSignExtend(exprList[0], exprList[1], exprList[2]);
 			  	else if (str.equals("zfill")) ret = ExpressionFactory.createZeroFill(exprList[0], exprList[1], exprList[2]);
@@ -1021,7 +1023,7 @@ rtlExpr[int bw] returns [ RTLExpression ret = null;]
 			  	// temporary solution until real float support
 			  	else if (str.equals("ftoi")) ret = ExpressionFactory.createFloatResize(exprList[0], exprList[1], exprList[2]);
 			  	else if (str.equals("itof")) ret = ExpressionFactory.createFloatResize(exprList[0], exprList[1], exprList[2]);
-				else ret = ExpressionFactory.createSpecialExpression(str, exprList); 
+				else ret = ExpressionFactory.createSpecialExpression(str, exprList);
 			}
 ;
 
