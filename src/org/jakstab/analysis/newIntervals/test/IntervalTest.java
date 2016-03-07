@@ -3,6 +3,7 @@ package org.jakstab.analysis.newIntervals.test;
 import org.jakstab.Options;
 import org.jakstab.analysis.newIntervals.Bits;
 import org.jakstab.analysis.newIntervals.Interval;
+import org.jakstab.analysis.newIntervals.IntervalValuationState;
 import org.jakstab.rtl.Context;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.util.FastSet;
@@ -46,7 +47,7 @@ public class IntervalTest {
 		logger.debug("*** Evaluating " + e + " ***");
 		Set<RTLNumber> rs = evalSet(e);
 		logger.debug("*** Real results: "  + rs + " ***");
-		Interval i = Interval.abstractEval(e);
+		Interval i = Interval.abstractEval(e, new IntervalValuationState());
 		logger.debug("*** Computed interval: " + i + " ***");
 		for (RTLNumber r : rs) {
 			if (!i.isElement(r)) {
@@ -58,16 +59,16 @@ public class IntervalTest {
 	/**
 	 * Create an expression which may yield any of the given numbers.
 	 *
-	 * @param bitsize Bitsize of the numbers.
+	 * @param bitSize Bit-size of the numbers.
 	 * @param someLongs The numbers.
 	 * @return An expression.
 	 */
-	public static RTLExpression numbers(int bitsize, long... someLongs) {
+	public static RTLExpression numbers(int bitSize, long... someLongs) {
 		RTLNumber[] someNumbers = new RTLNumber[someLongs.length];
-		Bits bits = Bits.fromInt(bitsize);
+		Bits bits = Bits.fromInt(bitSize);
 		for (int i = 0; i < someLongs.length; i++) {
 			assert (someLongs[i] & bits.getMask()) == someLongs[i] || ((someLongs[i] & ~bits.getMask()) == ~bits.getMask());
-			someNumbers[i] = ExpressionFactory.createNumber(someLongs[i], bitsize);
+			someNumbers[i] = ExpressionFactory.createNumber(someLongs[i], bitSize);
 		}
 		return numbers(someNumbers);
 	}

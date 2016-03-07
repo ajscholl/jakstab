@@ -17,7 +17,7 @@ public class Test {
 				}
 			}
 			Random r = new Random();
-			for (int i = 0; i < 1000; i++) {
+			for (int i = 0; i < 100000; i++) {
 				test(r.nextLong(), r.nextLong(), bit);
 			}
 		}
@@ -25,44 +25,50 @@ public class Test {
 	}
 
 	private static void test(long a, long b, Bits bit) {
-		a = a & bit.getMask();
-		b = b & bit.getMask();
-		Word ao = Word.mkWord(a, bit);
-		Word bo = Word.mkWord(b, bit);
-		BigInteger ba = BigInteger.valueOf(a & 0xFFFFFFFFL).or(BigInteger.valueOf(a >>> 32).shiftLeft(32));
-		BigInteger bb = BigInteger.valueOf(b & 0xFFFFFFFFL).or(BigInteger.valueOf(b >>> 32).shiftLeft(32));
-		ok(ba.compareTo(BigInteger.ZERO) >= 0, "Created negative literal: " + a);
-		ok(bb.compareTo(BigInteger.ZERO) >= 0, "Created negative literal: " + b);
-		ok(ba.add(bb), ao.add(bo), a + " + " + b);
-		ok(ba.subtract(bb), ao.sub(bo), a + " - " + b);
-		ok(ba.multiply(bb), ao.mul(bo), a + " * " + b);
-		if (b != 0) {
-			ok(ba.divide(bb), ao.div(bo), a + " / " + b);
-			ok(ba.mod(bb), ao.mod(bo), a + " % " + b);
+		long la = a & bit.getMask();
+		long lb = b & bit.getMask();
+		Word ao = Word.mkWord(la, bit);
+		Word bo = Word.mkWord(lb, bit);
+		ok(la == (ao.longValue() & bit.getMask()), "longValue failed for " + a + " (" + bit + ")");
+		ok(lb == (bo.longValue() & bit.getMask()), "longValue failed for " + b + " (" + bit + ")");
+		a = ao.longValue();
+		b = bo.longValue();
+		BigInteger ba = BigInteger.valueOf(la & 0xFFFFFFFFL).or(BigInteger.valueOf(la >>> 32).shiftLeft(32));
+		BigInteger bb = BigInteger.valueOf(lb & 0xFFFFFFFFL).or(BigInteger.valueOf(lb >>> 32).shiftLeft(32));
+		ok(ba.compareTo(BigInteger.ZERO) >= 0, "Created negative literal: " + la);
+		ok(bb.compareTo(BigInteger.ZERO) >= 0, "Created negative literal: " + lb);
+		ok(ba.add(bb), ao.add(bo), la + " + " + lb);
+		ok(ba.subtract(bb), ao.sub(bo), la + " - " + lb);
+		ok(ba.multiply(bb), ao.mul(bo), la + " * " + lb);
+		if (lb != 0) {
+			ok(ba.divide(bb), ao.udiv(bo), la + " /u " + lb);
+			ok(BigInteger.valueOf(a / b), ao.sdiv(bo), la + " /s " + lb);
+			ok(ba.mod(bb), ao.umod(bo), la + " %u " + lb);
+			ok(BigInteger.valueOf(a % b), ao.smod(bo), la + " %s " + lb);
 		}
-		ok(ba.add(BigInteger.ONE), ao.inc(), a + "++");
-		ok(bb.add(BigInteger.ONE), bo.inc(), b + "++");
-		ok(ba.subtract(BigInteger.ONE), ao.dec(), a + "--");
-		ok(bb.subtract(BigInteger.ONE), bo.dec(), b + "--");
+		ok(ba.add(BigInteger.ONE), ao.inc(), la + "++");
+		ok(bb.add(BigInteger.ONE), bo.inc(), lb + "++");
+		ok(ba.subtract(BigInteger.ONE), ao.dec(), la + "--");
+		ok(bb.subtract(BigInteger.ONE), bo.dec(), lb + "--");
 
-		long c = b & (bit.getBits() - 1);
+		long c = lb & (bit.getBits() - 1);
 		BigInteger cb = BigInteger.valueOf(c);
 		Word co = Word.mkWord(c, bit);
-		ok(ba.shiftLeft(cb.intValue()), ao.shl(co), a + " << " + c);
-		ok(ba.shiftRight(cb.intValue()), ao.shr(co), a + " >>> " + c);
-		ok(ba.and(bb), ao.and(bo), a + " & " + b);
-		ok(ba.or(bb), ao.or(bo), a + " | " + b);
-		ok(ba.xor(bb), ao.xor(bo), a + " ^ " + b);
-		ok(ba.not(), ao.not(), "~" + a);
-		ok(bb.not(), bo.not(), "~" + b);
+		ok(ba.shiftLeft(cb.intValue()), ao.shl((int)c), la + " << " + c);
+		ok(ba.shiftRight(cb.intValue()), ao.shr((int)c), la + " >>> " + c);
+		ok(ba.and(bb), ao.and(bo), la + " & " + lb);
+		ok(ba.or(bb), ao.or(bo), la + " | " + lb);
+		ok(ba.xor(bb), ao.xor(bo), la + " ^ " + lb);
+		ok(ba.not(), ao.not(), "~" + la);
+		ok(bb.not(), bo.not(), "~" + lb);
 
-		ok((ba.compareTo(bb) == ao.compareTo(bo)), a + " cmp " + b);
-		ok((ba.compareTo(bb) == -1) == ao.lessThan(bo), a + " < " + b);
-		ok((ba.compareTo(bb) == 1) == ao.greaterThan(bo), a + " > " + b);
-		ok((ba.compareTo(bb) != 1) == ao.lessThanOrEqual(bo), a + " <= " + b);
-		ok((ba.compareTo(bb) != -1) == ao.greaterThanOrEqual(bo), a + " >= " + b);
-		ok((ba.compareTo(bb) == 0) == ao.equalTo(bo), a + " == " + b);
-		ok((ba.compareTo(bb) != 0) == ao.unequalTo(bo), a + " != " + b);
+		ok((ba.compareTo(bb) == ao.compareTo(bo)), la + " cmp " + lb);
+		ok((ba.compareTo(bb) == -1) == ao.lessThan(bo), la + " < " + lb);
+		ok((ba.compareTo(bb) == 1) == ao.greaterThan(bo), la + " > " + lb);
+		ok((ba.compareTo(bb) != 1) == ao.lessThanOrEqual(bo), la + " <= " + lb);
+		ok((ba.compareTo(bb) != -1) == ao.greaterThanOrEqual(bo), la + " >= " + lb);
+		ok((ba.compareTo(bb) == 0) == ao.equalTo(bo), la + " == " + lb);
+		ok((ba.compareTo(bb) != 0) == ao.unequalTo(bo), la + " != " + lb);
 	}
 
 	private static void ok(boolean bool, String msg) {

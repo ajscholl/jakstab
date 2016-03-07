@@ -1,15 +1,18 @@
 package org.jakstab.analysis.newIntervals;
 
 import org.jakstab.AnalysisProperties;
-import org.jakstab.JOption;
 import org.jakstab.analysis.*;
 import org.jakstab.cfa.CFAEdge;
 import org.jakstab.cfa.Location;
 import org.jakstab.cfa.StateTransformer;
+import org.jakstab.rtl.expressions.RTLVariable;
 import org.jakstab.rtl.statements.RTLStatement;
+import org.jakstab.util.IterableIterator;
 import org.jakstab.util.Logger;
+import org.jakstab.util.MapMap;
 import org.jakstab.util.Pair;
 
+import java.util.Map;
 import java.util.Set;
 
 public class IntervalAnalysis implements ConfigurableProgramAnalysis {
@@ -21,67 +24,78 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
         p.setExplicit(true);
     }
 
-	public static JOption<Integer> threshold = JOption.create("interval-threshold", "k", 3, "Sets the threshold used in merge and prec.");
-
-    @SuppressWarnings("unused")
     private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
 
     public IntervalAnalysis() {
-
+		logger.debug("Started new interval analysis");
     }
 
     @Override
     public Precision initPrecision(Location location, StateTransformer transformer) {
+		logger.debug("Initialized precision");
         return new IntervalPrecision();
     }
 
     @Override
     public AbstractState initStartState(Location label) {
-        return Interval.mkDefaultInterval();
+		logger.debug("Initialized default state");
+		return new IntervalValuationState();
     }
 
     @Override
     public AbstractState merge(AbstractState s1, AbstractState s2, Precision precision) {
-        logger.debug("merge with precision " + precision + " on states " + s1.getIdentifier() + " and " + s2.getIdentifier());
-        //states equal? s2 is old state (comes from reachedSet)
-        if(s2.lessOrEqual(s1)) {
-            return s1;
-        }
-        IntervalPrecision prec = (IntervalPrecision) precision;
-        if(prec.getCount() >= threshold.getValue()) {
-            //widen
-            logger.debug("Will widen now");
-            Interval result = ((Interval) s2).widen((Interval) s1).join(s1).join(s2); // TODO can we remove the joins? the assert in widen should ensure this
-            logger.debug("s1: " + s1);
-            logger.debug("s2: " + s2);
-            logger.debug("result: " + result);
-            logger.debug("check: " + CPAOperators.mergeJoin(s1, s2, precision));
-            assert(CPAOperators.mergeJoin(s1, s2, precision).lessOrEqual(result));
-            return result;
-        } else {
-            return CPAOperators.mergeJoin(s1, s2, precision);
-        }
+		if (s2.isTop() || s1.isBot()) {
+			return s2;
+		}
+		if (s1.isTop()) {
+			return s1;
+		}
+		IntervalValuationState current = (IntervalValuationState) s1;
+		IntervalValuationState towards = (IntervalValuationState) s2;
+
+		IntervalValuationState widenedState = new IntervalValuationState();
+
+		// Widen variable valuations
+		for (Map.Entry<RTLVariable,Interval> entry : new IterableIterator<>(current.variableIterator())) {
+			RTLVariable var = entry.getKey();
+			Interval v = entry.getValue();
+			widenedState.setVariableValue(var, v.widen(towards.getVariableValue(var)));
+		}
+
+		// Widen memory
+		for (MapMap.EntryIterator<MemoryRegion, Long, Interval> entryIt = current.storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+			MemoryRegion region = entryIt.getLeftKey();
+			Long offset = entryIt.getRightKey();
+			Interval v = entryIt.getValue();
+			int bitWidth = v.getBitWidth();
+			widenedState.setMemoryValue(region, offset, bitWidth, v.widen(towards.getMemoryValue(region, offset, bitWidth)));
+		}
+
+		return widenedState;
     }
 
     @Override
     public Set<AbstractState> post(final AbstractState state, CFAEdge cfaEdge, Precision precision) {
-		return ((Interval) state).abstractPost((RTLStatement) cfaEdge.getTransformer(), precision);
+		return Interval.abstractPost((RTLStatement) cfaEdge.getTransformer(), (IntervalValuationState) state);
    }
 
     @Override
     public AbstractState strengthen(AbstractState s, Iterable<AbstractState> otherStates,
                                     CFAEdge cfaEdge, Precision precision) {
+		logger.debug("Failing to strengthen (not implemented)");
         return s; //TODO actually implement something
     }
 
     @Override
     public Pair<AbstractState, Precision> prec(AbstractState s, Precision precision, ReachedSet reached) {
+		logger.debug("Incrementing precision");
 		Precision newPrecision = ((IntervalPrecision) precision).inc();
         return Pair.create(s, newPrecision);
     }
 
     @Override
     public boolean stop(AbstractState s, ReachedSet reached, Precision precision) {
+		logger.debug("Stop-Join");
         return CPAOperators.stopJoin(s, reached, precision);
     }
 }

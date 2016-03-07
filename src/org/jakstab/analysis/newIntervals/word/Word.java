@@ -39,13 +39,13 @@ public abstract class Word implements Comparable<Word> {
 	protected abstract HashMap<Long, Word> getCache();
 
 	/**
-	 * Create a new instance of me, but with the given payload. Caches small numbers.
+	 * Create a new instance of me, but with the given payload. Caches small numbers to reduce memory pressure.
 	 *
 	 * @param val The payload.
 	 * @return The new instance.
 	 */
 	protected Word mkThisCached(long val) {
-		if (val < 100 && val > -100) {
+		if (val <= 0xFF && val >= -0xFF) {
 			HashMap<Long, Word> cache = getCache();
 			Long keyVal = val;
 			Word w = cache.get(keyVal);
@@ -84,8 +84,22 @@ public abstract class Word implements Comparable<Word> {
 		return BigInteger.valueOf(unsafeInternalValue());
 	}
 
+	/**
+	 * Return the most significant bit.
+	 *
+	 * @return The most significant bit.
+	 */
 	public boolean msb() {
 		return longValue() < 0;
+	}
+
+	/**
+	 * Return the sign of a word. 0 has a positive sign.
+	 *
+	 * @return The sign of a word.
+	 */
+	public Word sign() {
+		return mkThisCached(msb() ? -1 : 1);
 	}
 
 	public Word add(Word b) {
@@ -100,12 +114,20 @@ public abstract class Word implements Comparable<Word> {
 		return mkThisCached(val * b.val);
 	}
 
-	public Word div(Word b) {
+	public Word udiv(Word b) {
 		return mkThisCached(val / b.val);
 	}
 
-	public Word mod(Word b) {
+	public Word sdiv(Word b) {
+		return mkThisCached(longValue() / b.longValue());
+	}
+
+	public Word umod(Word b) {
 		return mkThisCached(val % b.val);
+	}
+
+	public Word smod(Word b) {
+		return mkThisCached(longValue() % b.longValue());
 	}
 
 	public Word inc() {
@@ -116,18 +138,22 @@ public abstract class Word implements Comparable<Word> {
 		return mkThisCached(val - 1);
 	}
 
-	public Word shl(Word b) {
-		if ((b.val & ~63) != 0) {
-			return mkThisCached(0);
-		}
-		return mkThisCached(val << b.val);
+	public Word negate() {
+		return not().inc();
 	}
 
-	public Word shr(Word b) {
-		if ((b.val & ~63) != 0) {
+	public Word shl(int b) {
+		if ((b & ~63) != 0) {
+			return mkThisCached(0);
+		}
+		return mkThisCached(val << (long)b);
+	}
+
+	public Word shr(int b) {
+		if ((b & ~63) != 0) {
 			return mkThis(0);
 		}
-		return mkThisCached(val >>> b.val);
+		return mkThisCached(val >>> (long)b);
 	}
 
 	public Word and(Word b) {

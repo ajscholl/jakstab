@@ -42,12 +42,12 @@ public class Word64 extends Word {
 	}
 
 	@Override
-	public Word div(Word b) {
+	public Word udiv(Word b) {
 		return mkThisCached(bigValue().divide(b.bigValue()).longValue());
 	}
 
 	@Override
-	public Word mod(Word b) {
+	public Word umod(Word b) {
 		return mkThisCached(bigValue().mod(b.bigValue()).longValue());
 	}
 
