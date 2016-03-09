@@ -27,7 +27,6 @@ import org.jakstab.rtl.expressions.RTLVariable;
 import org.jakstab.util.FastSet;
 import org.jakstab.util.Logger;
 import org.jakstab.util.MapMap.EntryIterator;
-import org.jakstab.util.Sets;
 import org.jakstab.util.Tuple;
 
 import java.math.BigInteger;
@@ -73,21 +72,24 @@ public class IntervalValuationState implements AbstractState {
 	public void setMemoryValue(Interval address, Interval value) {
 		int bitWidth = value.getBitWidth();
 		if (address.hasUniqueConcretization()) {
-			setMemoryValue(MemoryRegion.TOP, address.getUniqueConcretization(), bitWidth, value);
+			setMemoryValue(MemoryRegion.GLOBAL, address.getUniqueConcretization(), bitWidth, value);
 		}
 		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFF)) > 0) {
 			assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ")";
 			// TODO is this to much?
 			store.setTop();
+			return;
 		}
 		assert !address.isBot() : "Written BOT memory location";
+		assert address.size().compareTo(BigInteger.valueOf(0xFF)) <= 0 : "Iterating over large interval";
 		for (Long offset : address) {
-			Interval oldVal = getMemoryValue(MemoryRegion.TOP, offset, bitWidth);
-			setMemoryValue(MemoryRegion.TOP, address.getUniqueConcretization(), bitWidth, value.join(oldVal));
+			Interval oldVal = getMemoryValue(MemoryRegion.GLOBAL, offset, bitWidth);
+			setMemoryValue(MemoryRegion.GLOBAL, offset, bitWidth, value.join(oldVal));
 		}
 	}
 
 	public void setMemoryValue(MemoryRegion region, long offset, int bitWidth, Interval value) {
+		assert region != MemoryRegion.TOP : "PartitionedMemory does not like TOP";
 		store.set(region, offset, bitWidth, value);
 	}
 
@@ -104,7 +106,7 @@ public class IntervalValuationState implements AbstractState {
 		}
 		Set<Interval> results = new FastSet<>();
 		for (Long offset : address) {
-			results.add(getMemoryValue(MemoryRegion.TOP, offset, bitWidth));
+			results.add(getMemoryValue(MemoryRegion.GLOBAL, offset, bitWidth));
 		}
 		return Interval.joins(results);
 	}
@@ -155,11 +157,7 @@ public class IntervalValuationState implements AbstractState {
 
 	@Override
 	public Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression... expressions) {
-		if (expressions.length == 0) {
-			return Sets.crossProduct(new Tuple<Set<RTLNumber>>(0));
-		}
-		Bits bits = Bits.fromInt(expressions[0].getBitWidth());
-		return Interval.projectionFromConcretization(expressions, bits, this);
+		return Interval.projectionFromConcretization(expressions, this);
 	}
 
 	@Override

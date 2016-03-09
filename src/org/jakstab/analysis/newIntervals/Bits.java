@@ -2,12 +2,15 @@ package org.jakstab.analysis.newIntervals;
 
 import org.jakstab.analysis.newIntervals.word.Word;
 import org.jakstab.rtl.BitVectorType;
+import org.jakstab.util.Logger;
 
 /**
  * Different data types for different bit sizes.
  */
 public enum Bits implements BitVectorType {
 	BIT0(-1), BIT1(1), BIT8(8), BIT16(16), BIT32(32), BIT64(64);
+
+	private static final Logger logger = Logger.getLogger(Bits.class);
 
 	private final int bits;
 	private final long mask;
@@ -51,7 +54,9 @@ public enum Bits implements BitVectorType {
 	 * @return boolean
 	 */
 	public static boolean leq(Word a, Word b, Word c) {
-		return b.sub(a).lessThanOrEqual(c.sub(a));
+		boolean result = b.sub(a).lessThanOrEqual(c.sub(a));
+		logger.debug(b + " <=_" + a + " " + c + " = " + result);
+		return result;
 	}
 
 	public static Bits fromInt(int bitWidth) {

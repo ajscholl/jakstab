@@ -18,7 +18,7 @@ import java.util.*;
 
 public class Interval implements Comparable<Interval>, AbstractState, AbstractValue, BitVectorType, Iterable<Long> {
 
-	private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
+	private static final Logger logger = Logger.getLogger(Interval.class);
 
 	private static final JOption<Integer> maxConcretizationSize = JOption.create("interval-concretization-threshold", "k", 20, "Sets the maximum concretization size for intervals.");
 
@@ -208,15 +208,15 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 	@Override
 	public Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression... expressions) {
-		return projectionFromConcretization(expressions, bits, new IntervalValuationState());
+		return projectionFromConcretization(expressions, new IntervalValuationState());
 	}
 
-	public static Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression[] expressions, Bits bits, IntervalValuationState s) {
-		logger.debug("projection from concretization for " + expressions.length + " expressions");
+	public static Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression[] expressions, IntervalValuationState s) {
+		logger.debug("projection from concretization for " + expressions.length + " expressions: " + Arrays.toString(expressions));
 		Tuple<Set<RTLNumber>> cValues = new Tuple<>(expressions.length);
 		for (int i = 0; i < expressions.length; i++) {
 			Interval aValue = abstractEval(expressions[i], s);
-			logger.debug("expression: " + expressions[i] + " evaluated to: " + aValue + " " + aValue.isTop());
+			logger.debug("expression: " + expressions[i] + " evaluated to: " + aValue + " (isTop: " + aValue.isTop() + ")");
 			if (aValue.isTop()) {
 				//is Boolean expression?
 				if (expressions[i].getBitWidth() == 1) {
@@ -236,13 +236,15 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 						tmp = RTLNumber.ALL_NUMBERS;
 						break;
 					} else {
-						tmp.add(ExpressionFactory.createNumber(l, bits.getBits()));
+						tmp.add(ExpressionFactory.createNumber(l, aValue.bits.getBits()));
 					}
 				}
 				cValues.set(i, tmp);
 			}
 		}
-		return Sets.crossProduct(cValues);
+		Set<Tuple<RTLNumber>> result = Sets.crossProduct(cValues);
+		logger.debug("Projected " + result);
+		return result;
 	}
 
 	@Override
@@ -340,6 +342,14 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		assert Word.mkWord(e, bits).equals(e);
 		boolean result = isTop() || !isBot() && Bits.leq(minBits, e, maxBits);
 		logger.debug(e + " element of " + this + ": " + result);
+		if (hasUniqueConcretization()) {
+			if ( (e.longValue() == getUniqueConcretization()) != result ) {
+				logger.debug(isTop());
+				logger.debug(isBot());
+				logger.debug(Bits.leq(minBits, e, maxBits));
+			}
+			assert (e.longValue() == getUniqueConcretization()) == result : "isElement for single-element interval broken for " + this + " and " + e;
+		}
 		return result;
 	}
 
@@ -1213,15 +1223,17 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 					assert args.length == 2;
 					Interval op0 = abstractEval(args[0], newState);
 					Interval op1 = abstractEval(args[1], newState);
-					assert false : "TODO";
+					//assert false : "TODO";
 				case LESS:
-					assert false : "TODO";
+					//assert false : "TODO";
 				case LESS_OR_EQUAL:
-					assert false : "TODO";
+					//assert false : "TODO";
 				case UNSIGNED_LESS:
-					assert false : "TODO";
+					//assert false : "TODO";
 				case UNSIGNED_LESS_OR_EQUAL:
-					assert false : "TODO";
+					//assert false : "TODO";
+				case NOT:
+					//assert false : "TODO";
 
 				// operators not handled:
 				case FSIZE:
@@ -1234,7 +1246,6 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 				case ZERO_FILL:
 
 				case XOR:
-				case NOT:
 				case NEG:
 				case PLUS:
 				case MUL:
@@ -1250,7 +1261,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 				case ROLC:
 				case RORC:
 				default:
-					assert false : "Unknown or unhandled operator " + op.getOperator();
+					logger.warn("assumeTrue: Unknown or unhandled operator " + op.getOperator());
 			}
 			return newState;
 		} else if (e instanceof RTLBitRange) {

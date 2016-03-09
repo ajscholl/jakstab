@@ -12,7 +12,7 @@ public class Word32 extends Word {
 
 	@Override
 	public long getMask() {
-		return 0xFFFFFFFF;
+		return 0xFFFFFFFFL;
 	}
 
 	@Override

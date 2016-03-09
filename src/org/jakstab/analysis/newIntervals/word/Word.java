@@ -13,6 +13,7 @@ public abstract class Word implements Comparable<Word> {
 	protected final long val;
 
 	protected Word(long val) {
+		assert getMask() != -1L || this instanceof Word64;
 		this.val = val & getMask();
 	}
 
