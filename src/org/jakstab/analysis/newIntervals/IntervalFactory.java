@@ -10,14 +10,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-public class IntervalFactory implements AbstractValueFactory<Interval> {
+public final class IntervalFactory implements AbstractValueFactory<Interval> {
 
 	@SuppressWarnings("unused")
 	private static final Logger logger = Logger.getLogger(IntervalFactory.class);
 
-	private static IntervalFactory factory = new IntervalFactory();
+	private static final IntervalFactory factory = new IntervalFactory();
 
 	private IntervalFactory() {
+		super();
 	}
 
 	@Override
@@ -41,12 +42,12 @@ public class IntervalFactory implements AbstractValueFactory<Interval> {
 
 	@Override
 	public Interval createFalse() {
-		return new Interval(ExpressionFactory.createNumber(0, 1));
+		return new Interval(ExpressionFactory.createNumber(0L, 1));
 	}
 
 	@Override
 	public Interval createTrue() {
-		return new Interval(ExpressionFactory.createNumber(1, 1));
+		return new Interval(ExpressionFactory.createNumber(1L, 1));
 	}
 
 	public static IntervalFactory getFactory() {

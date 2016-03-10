@@ -13,7 +13,7 @@ public class Word64 extends Word {
 
 	@Override
 	public long getMask() {
-		return ~0;
+		return ~0L;
 	}
 
 	@Override
@@ -52,15 +52,15 @@ public class Word64 extends Word {
 	}
 
 	public static BigInteger wordToBigInteger(long w) {
-		if (w < 0) {
-			return BigInteger.valueOf(w).add(BigInteger.valueOf(2).pow(64));
+		if (w < 0L) {
+			return BigInteger.valueOf(w).add(BigInteger.valueOf(2L).pow(64));
 		}
 		return BigInteger.valueOf(w);
 	}
 
 	@Override
 	public java.lang.String toString() {
-		if (val < 0) {
+		if (val < 0L) {
 			return bigValue().toString();
 		} else {
 			return super.toString();
@@ -69,10 +69,10 @@ public class Word64 extends Word {
 
 	@Override
 	public boolean lessThan(Word b) {
-		if (val < 0) {
-			return b.val < 0 && val < b.val;
+		if (val < 0L) {
+			return b.val < 0L && val < b.val;
 		} else {
-			return b.val < 0 || val < b.val;
+			return b.val < 0L || val < b.val;
 		}
 	}
 

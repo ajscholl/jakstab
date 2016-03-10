@@ -7,9 +7,9 @@ import java.util.Random;
 
 public class Test {
 	public static void main(String[] args) {
-		long[] testData = new long[] {-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5};
-		Bits[] bits = new Bits[] {Bits.BIT8, Bits.BIT16, Bits.BIT32, Bits.BIT64};
 		System.out.println("Running integral test...");
+		Bits[] bits = {Bits.BIT8, Bits.BIT16, Bits.BIT32, Bits.BIT64};
+		long[] testData = {-5L, -4L, -3L, -2L, -1L, 0L, 1L, 2L, 3L, 4L, 5L};
 		for (Bits bit : bits) {
 			for (long a : testData) {
 				for (long b : testData) {
@@ -29,8 +29,8 @@ public class Test {
 		long lb = b & bit.getMask();
 		Word ao = Word.mkWord(la, bit);
 		Word bo = Word.mkWord(lb, bit);
-		ok(la == (ao.longValue() & bit.getMask()), "longValue failed for " + a + " (" + bit + ")");
-		ok(lb == (bo.longValue() & bit.getMask()), "longValue failed for " + b + " (" + bit + ")");
+		ok(la == (ao.longValue() & bit.getMask()), "longValue failed for " + a + " (" + bit + ')');
+		ok(lb == (bo.longValue() & bit.getMask()), "longValue failed for " + b + " (" + bit + ')');
 		a = ao.longValue();
 		b = bo.longValue();
 		BigInteger ba = BigInteger.valueOf(la & 0xFFFFFFFFL).or(BigInteger.valueOf(la >>> 32).shiftLeft(32));
@@ -40,7 +40,7 @@ public class Test {
 		ok(ba.add(bb), ao.add(bo), la + " + " + lb);
 		ok(ba.subtract(bb), ao.sub(bo), la + " - " + lb);
 		ok(ba.multiply(bb), ao.mul(bo), la + " * " + lb);
-		if (lb != 0) {
+		if (lb != 0L) {
 			ok(ba.divide(bb), ao.udiv(bo), la + " /u " + lb);
 			ok(BigInteger.valueOf(a / b), ao.sdiv(bo), la + " /s " + lb);
 			ok(ba.mod(bb), ao.umod(bo), la + " %u " + lb);
@@ -51,9 +51,8 @@ public class Test {
 		ok(ba.subtract(BigInteger.ONE), ao.dec(), la + "--");
 		ok(bb.subtract(BigInteger.ONE), bo.dec(), lb + "--");
 
-		long c = lb & (bit.getBits() - 1);
+		long c = lb & (long) bit.getBits() - 1L;
 		BigInteger cb = BigInteger.valueOf(c);
-		Word co = Word.mkWord(c, bit);
 		ok(ba.shiftLeft(cb.intValue()), ao.shl((int)c), la + " << " + c);
 		ok(ba.shiftRight(cb.intValue()), ao.shr((int)c), la + " >>> " + c);
 		ok(ba.and(bb), ao.and(bo), la + " & " + lb);
@@ -62,7 +61,7 @@ public class Test {
 		ok(ba.not(), ao.not(), "~" + la);
 		ok(bb.not(), bo.not(), "~" + lb);
 
-		ok((ba.compareTo(bb) == ao.compareTo(bo)), la + " cmp " + lb);
+		ok(ba.compareTo(bb) == ao.compareTo(bo), la + " cmp " + lb);
 		ok((ba.compareTo(bb) == -1) == ao.lessThan(bo), la + " < " + lb);
 		ok((ba.compareTo(bb) == 1) == ao.greaterThan(bo), la + " > " + lb);
 		ok((ba.compareTo(bb) != 1) == ao.lessThanOrEqual(bo), la + " <= " + lb);

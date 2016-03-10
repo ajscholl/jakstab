@@ -10,10 +10,11 @@ public class IntervalPrecision implements Precision {
 	private final int count;
 
 	public IntervalPrecision() {
-		count = 0;
+		this(0);
 	}
 
 	private IntervalPrecision(int c) {
+		super();
 		count = c;
 	}
 

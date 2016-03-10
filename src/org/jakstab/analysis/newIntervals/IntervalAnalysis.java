@@ -9,10 +9,10 @@ import org.jakstab.rtl.expressions.RTLVariable;
 import org.jakstab.rtl.statements.RTLStatement;
 import org.jakstab.util.IterableIterator;
 import org.jakstab.util.Logger;
-import org.jakstab.util.MapMap;
+import org.jakstab.util.MapMap.EntryIterator;
 import org.jakstab.util.Pair;
 
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 public class IntervalAnalysis implements ConfigurableProgramAnalysis {
@@ -56,14 +56,14 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		IntervalValuationState widenedState = new IntervalValuationState();
 
 		// Widen variable valuations
-		for (Map.Entry<RTLVariable,Interval> entry : new IterableIterator<>(current.variableIterator())) {
+		for (Entry<RTLVariable,Interval> entry : new IterableIterator<>(current.variableIterator())) {
 			RTLVariable var = entry.getKey();
 			Interval v = entry.getValue();
 			widenedState.setVariableValue(var, v.widen(towards.getVariableValue(var)));
 		}
 
 		// Widen memory
-		for (MapMap.EntryIterator<MemoryRegion, Long, Interval> entryIt = current.storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+		for (EntryIterator<MemoryRegion, Long, Interval> entryIt = current.storeIterator(); entryIt.hasEntry(); entryIt.next()) {
 			MemoryRegion region = entryIt.getLeftKey();
 			Long offset = entryIt.getRightKey();
 			Interval v = entryIt.getValue();

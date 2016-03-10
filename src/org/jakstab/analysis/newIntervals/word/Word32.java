@@ -4,7 +4,7 @@ import java.util.HashMap;
 
 public class Word32 extends Word {
 
-	private static HashMap<Long, Word> cache = new HashMap<>();
+	private static final HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word32(long val) {
 		super(val);

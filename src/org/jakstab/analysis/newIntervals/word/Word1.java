@@ -4,7 +4,7 @@ import java.util.HashMap;
 
 public class Word1 extends Word {
 
-	private static HashMap<Long, Word> cache = new HashMap<>();
+	private static final HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word1(long val) {
 		super(val);
@@ -12,7 +12,7 @@ public class Word1 extends Word {
 
 	@Override
 	public long getMask() {
-		return 1;
+		return 1L;
 	}
 
 	@Override
@@ -27,6 +27,6 @@ public class Word1 extends Word {
 
 	@Override
 	public long longValue() {
-		return val == 0 ? 0 : -1;
+		return val == 0L ? 0L : ~0L;
 	}
 }

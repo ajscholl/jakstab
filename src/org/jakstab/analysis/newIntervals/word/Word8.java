@@ -4,7 +4,7 @@ import java.util.HashMap;
 
 public class Word8 extends Word {
 
-	private static HashMap<Long, Word> cache = new HashMap<>();
+	private static final HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word8(long val) {
 		super(val);
@@ -12,7 +12,7 @@ public class Word8 extends Word {
 
 	@Override
 	public long getMask() {
-		return 0xFF;
+		return 0xFFL;
 	}
 
 	@Override

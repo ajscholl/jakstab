@@ -1,20 +1,3 @@
-/*
- * ValuationState.java - This file is part of the Jakstab project.
- * Copyright 2007-2015 Johannes Kinder <jk@jakstab.org>
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, see <http://www.gnu.org/licenses/>.
- */
 package org.jakstab.analysis.newIntervals;
 
 import org.jakstab.Options;
@@ -31,18 +14,18 @@ import org.jakstab.util.Tuple;
 
 import java.math.BigInteger;
 import java.util.Iterator;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 public class IntervalValuationState implements AbstractState {
 
 	private static final Logger logger = Logger.getLogger(IntervalValuationState.class);
 
-	private static long maxStateId = 0;
+	private static long maxStateId = 0L;
 
 	private final long id;
-	private VariableValuation<Interval> varVal;
-	private PartitionedMemory<Interval> store;
+	private final VariableValuation<Interval> varVal;
+	private final PartitionedMemory<Interval> store;
 
 	public IntervalValuationState(IntervalValuationState proto) {
 		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store));
@@ -53,11 +36,17 @@ public class IntervalValuationState implements AbstractState {
 	}
 
 	private IntervalValuationState(VariableValuation<Interval> varVal, PartitionedMemory<Interval> store) {
+		super();
 		assert varVal != null;
 		assert store != null;
 		this.varVal = varVal;
 		this.store = store;
-		this.id = maxStateId++;
+		id = maxStateId;
+		incId();
+	}
+
+	private static void incId() {
+		maxStateId++;
 	}
 
 	public Interval abstractEval(RTLExpression e) {
@@ -65,7 +54,7 @@ public class IntervalValuationState implements AbstractState {
 	}
 
 	public void setMemoryValue(RTLMemoryLocation location, Interval value) {
-		Interval address = Interval.abstractEval(location, this);
+		Interval address = Interval.abstractEval(location.getAddress(), this);
 		setMemoryValue(address, value);
 	}
 
@@ -74,14 +63,16 @@ public class IntervalValuationState implements AbstractState {
 		if (address.hasUniqueConcretization()) {
 			setMemoryValue(MemoryRegion.GLOBAL, address.getUniqueConcretization(), bitWidth, value);
 		}
-		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFF)) > 0) {
-			assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ")";
-			// TODO is this to much?
-			store.setTop();
+		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFFL)) > 0) {
+			if (!store.isTop()) {
+				assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ") when writing " + address + " with value " + value + " with memory " + store;
+				// TODO is this to much?
+				store.setTop();
+			}
 			return;
 		}
 		assert !address.isBot() : "Written BOT memory location";
-		assert address.size().compareTo(BigInteger.valueOf(0xFF)) <= 0 : "Iterating over large interval";
+		assert address.size().compareTo(BigInteger.valueOf(0xFFL)) <= 0 : "Iterating over large interval";
 		for (Long offset : address) {
 			Interval oldVal = getMemoryValue(MemoryRegion.GLOBAL, offset, bitWidth);
 			setMemoryValue(MemoryRegion.GLOBAL, offset, bitWidth, value.join(oldVal));
@@ -89,16 +80,17 @@ public class IntervalValuationState implements AbstractState {
 	}
 
 	public void setMemoryValue(MemoryRegion region, long offset, int bitWidth, Interval value) {
-		assert region != MemoryRegion.TOP : "PartitionedMemory does not like TOP";
+		assert region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
 		store.set(region, offset, bitWidth, value);
 	}
 
 	public void setVariableValue(RTLVariable var, Interval value) {
+		logger.debug("Setting " + var + " to " + value + " in state " + id);
 		varVal.set(var, value);
 	}
 
 	public Interval getMemoryValue(Interval address, int bitWidth) {
-		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFF)) > 0) {
+		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFFL)) > 0) {
 			return Interval.mkTopInterval(Bits.fromInt(bitWidth));
 		}
 		if (address.isBot()) {
@@ -112,7 +104,6 @@ public class IntervalValuationState implements AbstractState {
 	}
 
 	public Interval getMemoryValue(RTLMemoryLocation e) {
-		Set<Interval> res = new FastSet<>();
 		Interval iAddress = Interval.abstractEval(e.getAddress(), this);
 		return getMemoryValue(iAddress, e.getBitWidth());
 	}
@@ -125,7 +116,7 @@ public class IntervalValuationState implements AbstractState {
 		return varVal.get(var);
 	}
 
-	public Iterator<Map.Entry<RTLVariable, Interval>> variableIterator() {
+	public Iterator<Entry<RTLVariable, Interval>> variableIterator() {
 		return varVal.iterator();
 	}
 
@@ -140,7 +131,7 @@ public class IntervalValuationState implements AbstractState {
 
 	@Override
 	public Location getLocation() {
-		throw new UnsupportedOperationException(this.getClass().getSimpleName() + " does not contain location information.");
+		throw new UnsupportedOperationException(getClass().getSimpleName() + " does not contain location information.");
 	}
 
 	@Override
@@ -185,7 +176,7 @@ public class IntervalValuationState implements AbstractState {
 
 	@Override
 	public String toString() {
-		return "[" + id + "] I: " + varVal.toString() + " Mem:" + store.toString();
+		return "[" + id + "] I: " + varVal + " Mem:" + store;
 	}
 
 	@Override

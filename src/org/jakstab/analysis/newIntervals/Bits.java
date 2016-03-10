@@ -8,7 +8,7 @@ import org.jakstab.util.Logger;
  * Different data types for different bit sizes.
  */
 public enum Bits implements BitVectorType {
-	BIT0(-1), BIT1(1), BIT8(8), BIT16(16), BIT32(32), BIT64(64);
+	BIT1(1), BIT8(8), BIT16(16), BIT32(32), BIT64(64);
 
 	private static final Logger logger = Logger.getLogger(Bits.class);
 
@@ -18,7 +18,7 @@ public enum Bits implements BitVectorType {
 	Bits(int bits) {
 		this.bits = bits;
 		if (bits == 64) {
-			mask = ~0; // all bits set
+			mask = ~0L; // all bits set
 		} else {
 			mask = (1L << (long)bits) - 1L; // 2^bits - 1
 		}
@@ -29,7 +29,6 @@ public enum Bits implements BitVectorType {
 	 * @return bits.
 	 */
 	public int getBits() {
-		assert bits != -1;
 		return bits;
 	}
 
@@ -55,7 +54,7 @@ public enum Bits implements BitVectorType {
 	 */
 	public static boolean leq(Word a, Word b, Word c) {
 		boolean result = b.sub(a).lessThanOrEqual(c.sub(a));
-		logger.debug(b + " <=_" + a + " " + c + " = " + result);
+		logger.debug(b + " <=_" + a + ' ' + c + " = " + result);
 		return result;
 	}
 
@@ -74,12 +73,18 @@ public enum Bits implements BitVectorType {
 		return fromInt(bitWidth).narrow(val);
 	}
 
+	/**
+	 * Return the long value of the lower n-bits as a signed value.
+	 *
+	 * @param val The input.
+	 * @return The output.
+	 */
 	public long narrow(long val) {
 		switch (this) {
-			case BIT1: return val != 0 ? -1 : 0;
-			case BIT8: return (long)((byte)val);
-			case BIT16: return (long)((short)val);
-			case BIT32: return (long)((int)val);
+			case BIT1: return val == 0L ? 0L : ~0L;
+			case BIT8: return (long) (byte)val;
+			case BIT16: return (long) (short)val;
+			case BIT32: return (long) (int)val;
 			case BIT64: return val;
 			default: throw new UnsupportedOperationException("Can not narrow to an undefined bitwidth");
 		}

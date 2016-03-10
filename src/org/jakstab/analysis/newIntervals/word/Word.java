@@ -3,7 +3,7 @@ package org.jakstab.analysis.newIntervals.word;
 import org.jakstab.analysis.newIntervals.Bits;
 
 import java.math.BigInteger;
-import java.util.HashMap;
+import java.util.Map;
 
 public abstract class Word implements Comparable<Word> {
 
@@ -37,7 +37,7 @@ public abstract class Word implements Comparable<Word> {
 	 *
 	 * @return The cache.
 	 */
-	protected abstract HashMap<Long, Word> getCache();
+	protected abstract Map<Long, Word> getCache();
 
 	/**
 	 * Create a new instance of me, but with the given payload. Caches small numbers to reduce memory pressure.
@@ -46,8 +46,8 @@ public abstract class Word implements Comparable<Word> {
 	 * @return The new instance.
 	 */
 	protected Word mkThisCached(long val) {
-		if (val <= 0xFF && val >= -0xFF) {
-			HashMap<Long, Word> cache = getCache();
+		if (val <= 0xFFL && val >= -0xFFL) {
+			Map<Long, Word> cache = getCache();
 			Long keyVal = val;
 			Word w = cache.get(keyVal);
 			if (w == null) {
@@ -91,7 +91,7 @@ public abstract class Word implements Comparable<Word> {
 	 * @return The most significant bit.
 	 */
 	public boolean msb() {
-		return longValue() < 0;
+		return longValue() < 0L;
 	}
 
 	/**
@@ -100,7 +100,7 @@ public abstract class Word implements Comparable<Word> {
 	 * @return The sign of a word.
 	 */
 	public Word sign() {
-		return mkThisCached(msb() ? -1 : 1);
+		return mkThisCached(msb() ? -1L : 1L);
 	}
 
 	public Word add(Word b) {
@@ -132,11 +132,11 @@ public abstract class Word implements Comparable<Word> {
 	}
 
 	public Word inc() {
-		return mkThisCached(val + 1);
+		return mkThisCached(val + 1L);
 	}
 
 	public Word dec() {
-		return mkThisCached(val - 1);
+		return mkThisCached(val - 1L);
 	}
 
 	public Word negate() {
@@ -145,14 +145,14 @@ public abstract class Word implements Comparable<Word> {
 
 	public Word shl(int b) {
 		if ((b & ~63) != 0) {
-			return mkThisCached(0);
+			return mkThisCached(0L);
 		}
 		return mkThisCached(val << (long)b);
 	}
 
 	public Word shr(int b) {
 		if ((b & ~63) != 0) {
-			return mkThis(0);
+			return mkThis(0L);
 		}
 		return mkThisCached(val >>> (long)b);
 	}
