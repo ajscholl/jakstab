@@ -6,5 +6,19 @@ case `uname` in
         ;;
     *)
 esac
-if [ ! -d bin ]; then mkdir bin; fi
-javac -d bin/ `find -L src/ -name '*.java'` -cp ${JSCLASSPATH}
+mkdir -p bin
+#javac -d bin/ `find -L src/ -name '*.java'` -cp ${JSCLASSPATH}
+TODO=`make all`
+DONE=1
+for i in $TODO
+do
+    echo Compiling $i
+    DONE=0
+done
+if [[ $DONE -eq 0 ]]
+then
+    echo javac -d bin/ $TODO -cp bin/:${JSCLASSPATH} > __docompile.sh
+    sh __docompile.sh
+    rm __docompile.sh
+fi
+
