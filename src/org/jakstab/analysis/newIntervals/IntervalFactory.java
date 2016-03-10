@@ -18,7 +18,6 @@ public final class IntervalFactory implements AbstractValueFactory<Interval> {
 	private static final IntervalFactory factory = new IntervalFactory();
 
 	private IntervalFactory() {
-		super();
 	}
 
 	@Override

@@ -10,6 +10,7 @@ import org.jakstab.rtl.expressions.RTLVariable;
 import org.jakstab.util.FastSet;
 import org.jakstab.util.Logger;
 import org.jakstab.util.MapMap.EntryIterator;
+import org.jakstab.util.Pair;
 import org.jakstab.util.Tuple;
 
 import java.math.BigInteger;
@@ -26,21 +27,22 @@ public class IntervalValuationState implements AbstractState {
 	private final long id;
 	private final VariableValuation<Interval> varVal;
 	private final PartitionedMemory<Interval> store;
+	private final VariableRegion varRegions;
 
 	public IntervalValuationState(IntervalValuationState proto) {
-		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store));
+		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store), new VariableRegion(proto.varRegions));
 	}
 
 	public IntervalValuationState() {
-		this(new VariableValuation<>(IntervalFactory.getFactory()), new PartitionedMemory<>(IntervalFactory.getFactory()));
+		this(new VariableValuation<>(IntervalFactory.getFactory()), new PartitionedMemory<>(IntervalFactory.getFactory()), new VariableRegion());
 	}
 
-	private IntervalValuationState(VariableValuation<Interval> varVal, PartitionedMemory<Interval> store) {
-		super();
+	private IntervalValuationState(VariableValuation<Interval> varVal, PartitionedMemory<Interval> store, VariableRegion varRegions) {
 		assert varVal != null;
 		assert store != null;
 		this.varVal = varVal;
 		this.store = store;
+		this.varRegions = varRegions;
 		id = maxStateId;
 		incId();
 	}
@@ -66,8 +68,9 @@ public class IntervalValuationState implements AbstractState {
 		if (address.isTop() || address.size().compareTo(BigInteger.valueOf(0xFFL)) > 0) {
 			if (!store.isTop()) {
 				assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ") when writing " + address + " with value " + value + " with memory " + store;
-				// TODO is this to much?
-				store.setTop();
+				for (EntryIterator<MemoryRegion, Long, Interval> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+					store.set(entryIt.getLeftKey(), entryIt.getRightKey(), value.getBitWidth(), entryIt.getValue().join(value));
+				}
 			}
 			return;
 		}
@@ -84,9 +87,10 @@ public class IntervalValuationState implements AbstractState {
 		store.set(region, offset, bitWidth, value);
 	}
 
-	public void setVariableValue(RTLVariable var, Interval value) {
-		logger.debug("Setting " + var + " to " + value + " in state " + id);
+	public void setVariableValue(RTLVariable var, Interval value, MemoryRegion region) {
+		logger.debug("Setting " + var + " to " + value + '/' + region + " in state " + id);
 		varVal.set(var, value);
+		varRegions.set(var, region);
 	}
 
 	public Interval getMemoryValue(Interval address, int bitWidth) {
@@ -112,8 +116,8 @@ public class IntervalValuationState implements AbstractState {
 		return store.get(region, offset, bitWidth);
 	}
 
-	public Interval getVariableValue(RTLVariable var) {
-		return varVal.get(var);
+	public Pair<Interval, MemoryRegion> getVariableValue(RTLVariable var) {
+		return new Pair<>(varVal.get(var), varRegions.get(var));
 	}
 
 	public Iterator<Entry<RTLVariable, Interval>> variableIterator() {
@@ -143,7 +147,7 @@ public class IntervalValuationState implements AbstractState {
 		if (isBot() || other.isTop()) {
 			return other;
 		}
-		return new IntervalValuationState(varVal.join(other.varVal), store.join(other.store));
+		return new IntervalValuationState(varVal.join(other.varVal), store.join(other.store), varRegions.join(other.varRegions));
 	}
 
 	@Override
@@ -153,12 +157,12 @@ public class IntervalValuationState implements AbstractState {
 
 	@Override
 	public boolean isBot() {
-		return varVal.isBot() && store.isBot();
+		return false;
 	}
 
 	@Override
 	public boolean isTop() {
-		return varVal.isTop() && store.isTop();
+		return varVal.isTop() && store.isTop() && varRegions.isTop();
 	}
 
 	@Override
@@ -170,18 +174,18 @@ public class IntervalValuationState implements AbstractState {
 			return false;
 		}
 		IntervalValuationState other = (IntervalValuationState) l;
-		return varVal.lessOrEqual(other.varVal) && store.lessOrEqual(other.store);
+		return varVal.lessOrEqual(other.varVal) && store.lessOrEqual(other.store) && varRegions.lessOrEqual(other.varRegions);
 
 	}
 
 	@Override
 	public String toString() {
-		return "[" + id + "] I: " + varVal + " Mem:" + store;
+		return "[" + id + "] I: " + varVal + " Mem:" + store + " Regions: " + varRegions;
 	}
 
 	@Override
 	public int hashCode() {
-		return store.hashCode() ^ varVal.hashCode();
+		return store.hashCode() ^ varVal.hashCode() ^ varRegions.hashCode();
 	}
 
 	@Override
@@ -193,6 +197,6 @@ public class IntervalValuationState implements AbstractState {
 			return false;
 		}
 		IntervalValuationState other = (IntervalValuationState) obj;
-		return store.equals(other.store) && varVal.equals(other.varVal);
+		return store.equals(other.store) && varVal.equals(other.varVal) && varRegions.equals(other.varRegions);
 	}
 }

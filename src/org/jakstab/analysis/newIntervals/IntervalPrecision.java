@@ -14,7 +14,6 @@ public class IntervalPrecision implements Precision {
 	}
 
 	private IntervalPrecision(int c) {
-		super();
 		count = c;
 	}
 

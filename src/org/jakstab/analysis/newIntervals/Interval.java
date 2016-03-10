@@ -36,7 +36,6 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	public static final Interval BOTH_INTERVAL = mkTopInterval(Bits.BIT1);
 
 	private Interval(Word minBits, Word maxBits, Bits bits, IntervalKind kind, boolean allowPromote) {
-		super();
 		assert bits != null;
 		assert kind != null;
 		assert kind != IntervalKind.INTERVAL || minBits != null && maxBits != null;
@@ -1498,7 +1497,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 				IntervalValuationState newState = new IntervalValuationState(s);
 				Interval rhs = abstractEval(stmt.getRightHandSide(), s);
 				newState.setVariableValue(stmt.getLeftHandSide(), rhs);
-				logger.verbose("Assigned " + stmt.getLeftHandSide() + " = " + rhs);
+				logger.verbose("Set " + stmt.getLeftHandSide() + " = " + rhs);
 				return Collections.singleton((AbstractState) newState);
 			}
 
@@ -1508,7 +1507,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 				IntervalValuationState newState = new IntervalValuationState(s);
 				Interval rhs = abstractEval(stmt.getRightHandSide(), s);
 				newState.setMemoryValue(stmt.getLeftHandSide(), rhs);
-				logger.verbose("Written [" + stmt.getLeftHandSide() + "] = " + rhs);
+				logger.verbose("Set [" + stmt.getLeftHandSide() + "] = " + rhs);
 				return Collections.singleton((AbstractState) newState);
 			}
 
@@ -1523,44 +1522,73 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			@Override
 			public Set<AbstractState> visit(RTLAlloc stmt) {
 				logger.verbose("Ignoring RTLAlloc: " + stmt);
-				return Collections.singleton((AbstractState) s);
+				return Collections.singleton((AbstractState) s); //TODO
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLDealloc stmt) {
 				logger.verbose("Ignoring RTLDealloc: " + stmt);
-				return Collections.singleton((AbstractState) s);
+				return Collections.singleton((AbstractState) s); //TODO
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLUnknownProcedureCall stmt) {
 				logger.verbose("Found RTLUnknownProcedureCall: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				assert !Options.failFast.getValue() : "Unknown procedure call: " + stmt;
+				return Collections.singleton((AbstractState) new IntervalValuationState());
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLHavoc stmt) {
 				logger.verbose("Found RTLHavoc: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				IntervalValuationState newState = new IntervalValuationState(s);
+				RTLVariable var = stmt.getVariable();
+				newState.setVariableValue(var, mkTopInterval(Bits.fromInt(var.getBitWidth())));
+				return Collections.singleton((AbstractState) assumeTrue(ExpressionFactory.createUnsignedLessOrEqual(var, stmt.getMaximum()), newState));
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLMemset stmt) {
 				logger.verbose("Found RTLMemset: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				Interval destination = abstractEval(stmt.getDestination(), s);
+				Interval value = abstractEval(stmt.getValue(), s);
+				Interval count = abstractEval(stmt.getCount(), s);
+				logger.verbose("MemSet(dst: " + destination + ", val: " + value + ", count: " + count + ')');
+				IntervalValuationState newState = new IntervalValuationState(s);
+				if (count.hasUniqueConcretization()) {
+					for (long i = 0L; i < count.getUniqueConcretization(); i++) {
+						newState.setMemoryValue(destination.addInterval(mkSomeInterval(i, i, count.bits)), value);
+					}
+				} else {
+					assert !Options.failFast.getValue() : "Memset with unknown count parameter: " + count;
+				}
+				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLMemcpy stmt) {
 				logger.verbose("Found RTLMemcpy: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				Interval source = abstractEval(stmt.getSource(), s);
+				Interval destination = abstractEval(stmt.getDestination(), s);
+				Interval size = abstractEval(stmt.getSize(), s);
+				logger.verbose("RTLMemcpy(src: " + source + ", dst: " + destination + ", size: " + size + ')');
+				IntervalValuationState newState = new IntervalValuationState(s);
+				if (size.hasUniqueConcretization()) {
+					for (long i = 0L; i < size.getUniqueConcretization(); i++) {
+						Interval value = newState.getMemoryValue(source.addInterval(mkSomeInterval(i, i, size.bits)), 8);
+						newState.setMemoryValue(destination.addInterval(mkSomeInterval(i, i, size.bits)), value);
+					}
+				} else {
+					assert !Options.failFast.getValue() : "Memcpy with unknown count parameter: " + size;
+				}
+				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visitDefault(RTLStatement stmt) {
 				logger.verbose("Found RTLStatement: " + stmt);
 				assert !Options.failFast.getValue() : "Unknown statement: " + stmt;
-				return Collections.singleton((AbstractState)new IntervalValuationState());
+				return Collections.singleton((AbstractState) new IntervalValuationState());
 			}
 		});
 

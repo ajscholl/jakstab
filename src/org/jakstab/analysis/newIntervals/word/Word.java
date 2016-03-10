@@ -18,7 +18,6 @@ public abstract class Word implements Comparable<Word> {
 	protected final long mask;
 
 	protected Word(long val, long mask) {
-		super();
 		this.val = val & mask;
 		this.mask = mask;
 	}

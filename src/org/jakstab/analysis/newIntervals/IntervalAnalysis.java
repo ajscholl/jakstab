@@ -15,6 +15,7 @@ import org.jakstab.util.Pair;
 import java.util.Map.Entry;
 import java.util.Set;
 
+@SuppressWarnings("Unused")
 public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 
     public static void register(AnalysisProperties p) {
@@ -39,7 +40,9 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
     @Override
     public AbstractState initStartState(Location label) {
 		logger.debug("Initialized default state");
-		return new IntervalValuationState();
+		IntervalValuationState result = new IntervalValuationState();
+		result.setVariableValue(esp, zero, MemoryRegion.STACK);
+		return result;
     }
 
     @Override
