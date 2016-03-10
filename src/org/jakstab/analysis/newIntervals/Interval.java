@@ -43,7 +43,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 		this.bits = bits;
 
-		if (allowPromote && kind == IntervalKind.INTERVAL && minBits.equals(maxBits.add(Word.mkWord(1L, bits)))) {
+		if (allowPromote && kind == IntervalKind.INTERVAL && minBits.equals(maxBits.add(Word.valueOf(1L, bits)))) {
 			this.minBits = null;
 			this.maxBits = null;
 			this.kind = IntervalKind.TOP;
@@ -57,7 +57,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
 	private Interval(RTLNumber n, Bits bits) {
-		this(Word.mkWord(n.longValue(), bits), Word.mkWord(n.longValue(), bits), bits, IntervalKind.INTERVAL, true);
+		this(Word.valueOf(n.longValue(), bits), Word.valueOf(n.longValue(), bits), bits, IntervalKind.INTERVAL, true);
 	}
 
 	Interval(RTLNumber n) {
@@ -83,14 +83,14 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
 	private static Interval mkSomeInterval(long min, long max, Bits bits) {
-		Word minW = Word.mkWord(min, bits);
-		Word maxW = Word.mkWord(max, bits);
+		Word minW = Word.valueOf(min, bits);
+		Word maxW = Word.valueOf(max, bits);
 		return new Interval(minW, maxW, bits, IntervalKind.INTERVAL, true);
 	}
 
 	private static Interval mkSpecificInterval(long min, long max, Bits bits) {
-		Word minW = Word.mkWord(min, bits);
-		Word maxW = Word.mkWord(max, bits);
+		Word minW = Word.valueOf(min, bits);
+		Word maxW = Word.valueOf(max, bits);
 		return new Interval(minW, maxW, bits, IntervalKind.INTERVAL, false);
 	}
 
@@ -308,7 +308,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	 */
 	private boolean isElement(long e) {
 		assert bits.narrow(e) == e : "bad call to isElement with " + e + " (" + bits.narrow(e) + ", " + bits + ')';
-		return isElement(Word.mkWord(e, bits));
+		return isElement(Word.valueOf(e, bits));
 	}
 
 	/**
@@ -330,7 +330,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	 * @return True if the value is in the interval.
 	 */
 	public boolean isElement(Word e) {
-		assert Word.mkWord(e, bits).equals(e);
+		assert Word.valueOf(e, bits).equals(e);
 		boolean result = isTop() || !isBot() && Bits.leq(minBits, e, maxBits);
 		logger.debug(e + " element of " + this + ": " + result);
 		if (hasUniqueConcretization()) {
@@ -431,7 +431,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		Interval f = mkBotInterval(bits);
 		Interval g = mkBotInterval(bits);
 		for (Interval e : s) {
-			if (e.kind == IntervalKind.TOP || e.kind == IntervalKind.INTERVAL && Bits.leq(Word.mkWord(0L, bits), e.maxBits, e.minBits)) {
+			if (e.kind == IntervalKind.TOP || e.kind == IntervalKind.INTERVAL && Bits.leq(Word.valueOf(0L, bits), e.maxBits, e.minBits)) {
 				f.extent(e);
 			}
 		}
@@ -735,7 +735,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 
 	private Interval amb() {
 		assert kind == IntervalKind.INTERVAL;
-		return mkSomeInterval(Word.mkWord(0L, bits), maxBits.dec(), bits);
+		return mkSomeInterval(Word.valueOf(0L, bits), maxBits.dec(), bits);
 	}
 
 	private Interval rem_u(Interval t) {
@@ -801,7 +801,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
 	private static Word minOr(Word a, Word b, Word c, Word d, Bits bits) {
-		Word m = Word.mkWord(1L << bits.getBitWidth() - 1, bits);
+		Word m = Word.valueOf(1L << bits.getBitWidth() - 1, bits);
 		while (m.longValue() != 0L) {
 			if (a.not().and(c).and(m).longValue() != 0L) {
 				Word e = a.or(m).and(m.negate());
@@ -820,7 +820,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 	}
 
 	private static Word maxOr(Word a, Word b, Word c, Word d, Bits bits) {
-		Word m = Word.mkWord(1L << bits.getBitWidth() - 1, bits);
+		Word m = Word.valueOf(1L << bits.getBitWidth() - 1, bits);
 		while (m.longValue() != 0L) {
 			if (b.and(d).and(m).longValue() != 0L) {
 				Word e = b.sub(m).or(m.dec());
@@ -962,7 +962,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 		} else {
 			Word a = minBits.shr(bitWidth);
 			Word b = maxBits.shr(bitWidth);
-			Word mask = Word.mkWord((1L << bitWidth - 1) - 1L, bits);
+			Word mask = Word.valueOf((1L << bitWidth - 1) - 1L, bits);
 			Word tMin = minBits.and(mask);
 			Word tMax = maxBits.and(mask);
 			if (a.equals(b) && tMin.lessThanOrEqual(tMax)) {
@@ -1087,8 +1087,8 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			result = mkTopInterval(bits);
 		} else {
 			Interval tmp = join(t);
-			Word one = Word.mkWord(1L, bits);
-			Word two = Word.mkWord(2L, bits);
+			Word one = Word.valueOf(1L, bits);
+			Word two = Word.valueOf(2L, bits);
 			if (tmp.equals(this)) {
 				result = mkSomeInterval(minBits, t.maxBits, bits).join(
 						mkSomeInterval(minBits, maxBits.mul(two).sub(minBits).add(one), bits));
@@ -1172,7 +1172,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			newS = s;
 		} else {
 			assert t.kind == IntervalKind.INTERVAL;
-			newS = s.meet(mkSomeInterval(Word.mkWord(0L, bits), t.maxBits, bits));
+			newS = s.meet(mkSomeInterval(Word.valueOf(0L, bits), t.maxBits, bits));
 		}
 		final Interval newT;
 		if (s.isBot()) {
@@ -1181,7 +1181,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			newT = t;
 		} else {
 			assert s.kind == IntervalKind.INTERVAL;
-			newT = t.meet(mkSomeInterval(s.minBits, Word.mkWord(bits.getMask(), bits), bits));
+			newT = t.meet(mkSomeInterval(s.minBits, Word.valueOf(bits.getMask(), bits), bits));
 		}
 		Pair<Interval, Interval> result = new Pair<>(newS, newT);
 		logger.debug("assume " + s + " <= " + t + ": " + result);
@@ -1198,7 +1198,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			newS = s;
 		} else {
 			assert t.kind == IntervalKind.INTERVAL;
-			newS = s.meet(mkSomeInterval(Word.mkWord(1L << bits.getBitWidth() - 1, bits), t.maxBits, bits));
+			newS = s.meet(mkSomeInterval(Word.valueOf(1L << bits.getBitWidth() - 1, bits), t.maxBits, bits));
 		}
 		final Interval newT;
 		if (s.isBot()) {
@@ -1207,7 +1207,7 @@ public class Interval implements Comparable<Interval>, AbstractState, AbstractVa
 			newT = t;
 		} else {
 			assert s.kind == IntervalKind.INTERVAL;
-			newT = t.meet(mkSomeInterval(s.minBits, Word.mkWord(bits.getMask() >> 1L, bits), bits));
+			newT = t.meet(mkSomeInterval(s.minBits, Word.valueOf(bits.getMask() >> 1L, bits), bits));
 		}
 		Pair<Interval, Interval> result = new Pair<>(newS, newT);
 		logger.debug("assume " + s + " <= " + t + ": " + result);

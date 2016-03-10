@@ -1,11 +1,12 @@
-package org.jakstab.analysis.newIntervals.word;
+package org.jakstab.analysis.newIntervals.test;
 
 import org.jakstab.analysis.newIntervals.Bits;
+import org.jakstab.analysis.newIntervals.word.Word;
 
 import java.math.BigInteger;
 import java.util.Random;
 
-public class Test {
+public class WordTest {
 	public static void main(String[] args) {
 		System.out.println("Running integral test...");
 		Bits[] bits = {Bits.BIT8, Bits.BIT16, Bits.BIT32, Bits.BIT64};
@@ -27,8 +28,8 @@ public class Test {
 	private static void test(long a, long b, Bits bit) {
 		long la = a & bit.getMask();
 		long lb = b & bit.getMask();
-		Word ao = Word.mkWord(la, bit);
-		Word bo = Word.mkWord(lb, bit);
+		Word ao = Word.valueOf(la, bit);
+		Word bo = Word.valueOf(lb, bit);
 		ok(la == (ao.longValue() & bit.getMask()), "longValue failed for " + a + " (" + bit + ')');
 		ok(lb == (bo.longValue() & bit.getMask()), "longValue failed for " + b + " (" + bit + ')');
 		a = ao.longValue();
@@ -77,6 +78,6 @@ public class Test {
 	}
 
 	private static void ok(BigInteger a, Word b, String msg) {
-		ok(b.mkThis(a.longValue()).equals(b), msg + " --> " + a + " != " + b);
+		ok(b.valueOf(a.longValue()).equals(b), msg + " --> " + a + " != " + b);
 	}
 }

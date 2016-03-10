@@ -7,12 +7,7 @@ public class Word16 extends Word {
 	private static final HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word16(long val) {
-		super(val);
-	}
-
-	@Override
-	public long getMask() {
-		return 0xFFFFL;
+		super(val, 0xFFFFL);
 	}
 
 	@Override

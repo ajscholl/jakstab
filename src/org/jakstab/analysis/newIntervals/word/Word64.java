@@ -8,12 +8,7 @@ public class Word64 extends Word {
 	private static HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word64(long val) {
-		super(val);
-	}
-
-	@Override
-	public long getMask() {
-		return ~0L;
+		super(val, ~0L);
 	}
 
 	@Override
@@ -38,17 +33,17 @@ public class Word64 extends Word {
 
 	@Override
 	public Word mul(Word b) {
-		return mkThisCached(bigValue().multiply(b.bigValue()).longValue());
+		return valueOf(bigValue().multiply(b.bigValue()).longValue());
 	}
 
 	@Override
 	public Word udiv(Word b) {
-		return mkThisCached(bigValue().divide(b.bigValue()).longValue());
+		return valueOf(bigValue().divide(b.bigValue()).longValue());
 	}
 
 	@Override
 	public Word umod(Word b) {
-		return mkThisCached(bigValue().mod(b.bigValue()).longValue());
+		return valueOf(bigValue().mod(b.bigValue()).longValue());
 	}
 
 	public static BigInteger wordToBigInteger(long w) {

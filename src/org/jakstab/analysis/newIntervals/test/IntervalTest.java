@@ -8,6 +8,7 @@ import org.jakstab.rtl.Context;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.util.FastSet;
 import org.jakstab.util.Logger;
+import org.jakstab.util.Logger.Level;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,15 +23,15 @@ public class IntervalTest {
 	private static final Logger logger = Logger.getLogger(IntervalTest.class);
 
 	public static void main(String[] args) {
-		RTLExpression e1 = numbers(8, -2, -1, 0, 1, 2);
-		RTLExpression e2 = numbers(8, 16, 32, 64, -128, -64);
+		RTLExpression e1 = numbers(8, -2L, -1L, 0L, 1L, 2L);
+		RTLExpression e2 = numbers(8, 16L, 32L, 64L, -128L, -64L);
 		RTLExpression e3 = ExpressionFactory.createPlus(e1, e2);
 		RTLExpression e4 = ExpressionFactory.createMinus(e1, e2);
 		RTLExpression e5 = ExpressionFactory.createMultiply(e1, e2);
 		RTLExpression e6 = ExpressionFactory.createAnd(e1, e2);
 		RTLExpression e7 = ExpressionFactory.createOr(e1, e2);
-		RTLExpression[] es = new RTLExpression[] {e1, e2, e3, e4, e5, e6, e7};
-		Options.verbosity.setValue(Logger.Level.DEBUG.ordinal());
+		RTLExpression[] es = {e1, e2, e3, e4, e5, e6, e7};
+		Options.verbosity.setValue(Level.DEBUG.ordinal());
 		logger.info("Running test...");
 		for (RTLExpression e : es) {
 			testEval(e);
@@ -39,7 +40,7 @@ public class IntervalTest {
 	}
 
 	/**
-	 * Test the evaluation of a single expression.
+	 * WordTest the evaluation of a single expression.
 	 *
 	 * @param e The expression.
 	 */
@@ -67,7 +68,7 @@ public class IntervalTest {
 		RTLNumber[] someNumbers = new RTLNumber[someLongs.length];
 		Bits bits = Bits.fromInt(bitSize);
 		for (int i = 0; i < someLongs.length; i++) {
-			assert (someLongs[i] & bits.getMask()) == someLongs[i] || ((someLongs[i] & ~bits.getMask()) == ~bits.getMask());
+			assert (someLongs[i] & bits.getMask()) == someLongs[i] || (someLongs[i] & ~bits.getMask()) == ~bits.getMask();
 			someNumbers[i] = ExpressionFactory.createNumber(someLongs[i], bitSize);
 		}
 		return numbers(someNumbers);
@@ -100,7 +101,7 @@ public class IntervalTest {
 			@Override
 			public Set<RTLNumber> visit(RTLBitRange e) {
 				// TODO handle bit ranges
-				throw new UnsupportedOperationException();
+				throw new UnsupportedOperationException("can not visit bit range");
 			}
 
 			@Override
@@ -109,10 +110,10 @@ public class IntervalTest {
 				Set<RTLNumber> cond = evalSet(e.getCondition());
 				Set<RTLNumber> result = new FastSet<>();
 				for (RTLNumber n : cond) {
-					if (n.longValue() == 0) {
+					if (n.longValue() == 0L) {
 						result.addAll(evalSet(e.getFalseExpression()));
 					} else {
-						result.addAll((evalSet(e.getTrueExpression())));
+						result.addAll(evalSet(e.getTrueExpression()));
 					}
 				}
 				return result;
@@ -130,7 +131,7 @@ public class IntervalTest {
 				Bits bits = Bits.fromInt(e.getBitWidth());
 				assert bits.getBitWidth() <= 8; // larger bit sizes are bad...
 				Set<RTLNumber> result = new FastSet<>();
-				for (long i = 0; (i & bits.getMask()) == i; i++) { // this loop is broken for 64 bits
+				for (long i = 0L; (i & bits.getMask()) == i; i++) { // TODO this loop is broken for 64 bits
 					result.add(ExpressionFactory.createNumber(bits.narrow(i), bits.getBitWidth()));
 				}
 				return result;
@@ -191,7 +192,7 @@ public class IntervalTest {
 			@Override
 			public Set<RTLNumber> visit(RTLSpecialExpression e) {
 				// these are strange and not really implemented IMHO
-				throw new UnsupportedOperationException();
+				throw new UnsupportedOperationException("can not visit special expression");
 			}
 
 			@Override

@@ -7,12 +7,7 @@ public class Word32 extends Word {
 	private static final HashMap<Long, Word> cache = new HashMap<>();
 
 	public Word32(long val) {
-		super(val);
-	}
-
-	@Override
-	public long getMask() {
-		return 0xFFFFFFFFL;
+		super(val, 0xFFFFFFFFL);
 	}
 
 	@Override

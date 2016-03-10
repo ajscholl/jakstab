@@ -12,17 +12,16 @@ public abstract class Word implements Comparable<Word> {
 	 */
 	protected final long val;
 
-	protected Word(long val) {
-		assert getMask() != -1L || this instanceof Word64;
-		this.val = val & getMask();
-	}
-
 	/**
-	 * Mask leaving only the relevant bits set.
-	 *
-	 * @return The mask.
+	 * The mask for this value.
 	 */
-	public abstract long getMask();
+	protected final long mask;
+
+	protected Word(long val, long mask) {
+		super();
+		this.val = val & mask;
+		this.mask = mask;
+	}
 
 	/**
 	 * Create a new instance of me, but with the given payload.
@@ -38,26 +37,6 @@ public abstract class Word implements Comparable<Word> {
 	 * @return The cache.
 	 */
 	protected abstract Map<Long, Word> getCache();
-
-	/**
-	 * Create a new instance of me, but with the given payload. Caches small numbers to reduce memory pressure.
-	 *
-	 * @param val The payload.
-	 * @return The new instance.
-	 */
-	protected Word mkThisCached(long val) {
-		if (val <= 0xFFL && val >= -0xFFL) {
-			Map<Long, Word> cache = getCache();
-			Long keyVal = val;
-			Word w = cache.get(keyVal);
-			if (w == null) {
-				w = mkThis(val);
-				cache.put(keyVal, w);
-			}
-			return w;
-		}
-		return mkThis(val);
-	}
 
 	/**
 	 * Get the internal representation of the number. The upper bits may be zero even
@@ -100,43 +79,43 @@ public abstract class Word implements Comparable<Word> {
 	 * @return The sign of a word.
 	 */
 	public Word sign() {
-		return mkThisCached(msb() ? -1L : 1L);
+		return valueOf(msb() ? -1L : 1L);
 	}
 
 	public Word add(Word b) {
-		return mkThisCached(val + b.val);
+		return valueOf(val + b.val);
 	}
 
 	public Word sub(Word b) {
-		return mkThisCached(val - b.val);
+		return valueOf(val - b.val);
 	}
 
 	public Word mul(Word b) {
-		return mkThisCached(val * b.val);
+		return valueOf(val * b.val);
 	}
 
 	public Word udiv(Word b) {
-		return mkThisCached(val / b.val);
+		return valueOf(val / b.val);
 	}
 
 	public Word sdiv(Word b) {
-		return mkThisCached(longValue() / b.longValue());
+		return valueOf(longValue() / b.longValue());
 	}
 
 	public Word umod(Word b) {
-		return mkThisCached(val % b.val);
+		return valueOf(val % b.val);
 	}
 
 	public Word smod(Word b) {
-		return mkThisCached(longValue() % b.longValue());
+		return valueOf(longValue() % b.longValue());
 	}
 
 	public Word inc() {
-		return mkThisCached(val + 1L);
+		return valueOf(val + 1L);
 	}
 
 	public Word dec() {
-		return mkThisCached(val - 1L);
+		return valueOf(val - 1L);
 	}
 
 	public Word negate() {
@@ -145,32 +124,32 @@ public abstract class Word implements Comparable<Word> {
 
 	public Word shl(int b) {
 		if ((b & ~63) != 0) {
-			return mkThisCached(0L);
+			return valueOf(0L);
 		}
-		return mkThisCached(val << (long)b);
+		return valueOf(val << (long)b);
 	}
 
 	public Word shr(int b) {
 		if ((b & ~63) != 0) {
 			return mkThis(0L);
 		}
-		return mkThisCached(val >>> (long)b);
+		return valueOf(val >>> (long)b);
 	}
 
 	public Word and(Word b) {
-		return mkThisCached(val & b.val);
+		return valueOf(val & b.val);
 	}
 
 	public Word or(Word b) {
-		return mkThisCached(val | b.val);
+		return valueOf(val | b.val);
 	}
 
 	public Word xor(Word b) {
-		return mkThisCached(val ^ b.val);
+		return valueOf(val ^ b.val);
 	}
 
 	public Word not() {
-		return mkThisCached(~val);
+		return valueOf(~val);
 	}
 
 	public boolean lessThan(Word b) {
@@ -230,7 +209,7 @@ public abstract class Word implements Comparable<Word> {
 	 * @param bits The size.
 	 * @return The word.
 	 */
-	public static Word mkWord(long w, Bits bits) {
+	public static Word valueOf(long w, Bits bits) {
 		switch (bits) {
 			case BIT1: return new Word1(w);
 			case BIT8: return new Word8(w);
@@ -248,10 +227,30 @@ public abstract class Word implements Comparable<Word> {
 	 * @param bits The size.
 	 * @return The word.
 	 */
-	public static Word mkWord(Word w, Bits bits) {
+	public static Word valueOf(Word w, Bits bits) {
 		if ((w.val & bits.getMask()) == w.val) {
 			return w;
 		}
-		return mkWord(w.val, bits);
+		return valueOf(w.val, bits);
+	}
+
+	/**
+	 * Create a new instance of me, but with the given payload. Caches small numbers to reduce memory pressure.
+	 *
+	 * @param val The payload.
+	 * @return The new instance.
+	 */
+	public Word valueOf(long val) {
+		if (val <= 0xFFL && val >= -0xFFL) {
+			Map<Long, Word> cache = getCache();
+			Long keyVal = val;
+			Word w = cache.get(keyVal);
+			if (w == null) {
+				w = mkThis(val);
+				cache.put(keyVal, w);
+			}
+			return w;
+		}
+		return mkThis(val);
 	}
 }
