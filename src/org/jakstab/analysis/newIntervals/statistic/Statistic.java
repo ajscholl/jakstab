@@ -36,6 +36,7 @@ public class Statistic {
 			while (keepGoing) {
 				try {
 					Thread.sleep(10L);
+					Runtime.getRuntime().gc();
 					usedMemory.add(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
 				} catch (InterruptedException ignore) {
 					keepGoing = false;
@@ -107,22 +108,22 @@ public class Statistic {
 		long pb = m;
 		StringBuilder s = new StringBuilder();
 		if (pb > 0L) {
-			s.append(pb).append(" PB");
+			s.append(pb).append(" PB ");
 		}
 		if (tb > 0L) {
-			s.append(pb).append(" TB");
+			s.append(tb).append(" TB ");
 		}
 		if (gb > 0L) {
-			s.append(pb).append(" GB");
+			s.append(gb).append(" GB ");
 		}
 		if (mb > 0L) {
-			s.append(pb).append(" MB");
+			s.append(mb).append(" MB ");
 		}
 		if (kb > 0L) {
-			s.append(pb).append(" KB");
+			s.append(kb).append(" KB ");
 		}
 		if (b > 0L) {
-			s.append(pb).append(" B");
+			s.append(b).append(" B ");
 		}
 		return s.toString();
 	}

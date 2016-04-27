@@ -400,14 +400,55 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 
 			@Override
 			public Set<AbstractState> visit(RTLAlloc stmt) {
-				logger.verbose("Ignoring RTLAlloc: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				logger.verbose("Found RTLAlloc: " + stmt);
+				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				Writable lhs = stmt.getPointer();
+				MemoryRegion newRegion;
+
+				// Check for hardcoded allocation names (i.e., stack or FS)
+				if (stmt.getAllocationName() != null) {
+					newRegion = MemoryRegion.create(stmt.getAllocationName());
+				} else {
+					newRegion = MemoryRegion.create("alloc" + stmt.getLabel() + '#' + newState.allocationCounter.countAllocation(stmt.getLabel()));
+				}
+				logger.debug("Allocated region " + newRegion);
+
+				// We also allow pointers of less than the actual address size, to emulate the 16 bit segment registers FS/GS
+				// FS gets a value of (FS, 0) in the prologue.
+
+				if (lhs instanceof RTLVariable) {
+					newState.setVariableValue((RTLVariable)lhs, IntervalElement.number(0L, lhs.getBitWidth()), newRegion);
+				} else {
+					RTLMemoryLocation m = (RTLMemoryLocation)lhs;
+					IntervalElement abstractAddress = newState.abstractEval(m);
+					newState.setMemoryValue(abstractAddress, IntervalElement.number(0L, lhs.getBitWidth()), newRegion);
+				}
+
+				return Collections.singleton((AbstractState)newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLDealloc stmt) {
 				logger.verbose("Ignoring RTLDealloc: " + stmt);
 				return Collections.singleton((AbstractState) s); //TODO
+
+				/*
+				BDDState post = copyThisState();
+				BDDSet abstractAddress = abstractEval(stmt.getPointer());
+				// if the address cannot be determined, set all store memory to TOP
+				if (abstractAddress.isTop()) {
+					logger.info(getIdentifier() + ": Cannot resolve location of deallocated memory pointer " + stmt.getPointer() + ". Might miss use after free bugs!");
+					//logger.info(getIdentifier() + ": Cannot resolve location of deallocated memory pointer " + stmt.getPointer() + ". Defaulting ALL memory to " + Characters.TOP);
+					//logger.info(BasedNumberValuation.this);
+					//post.aStore.setTop();
+				} else {
+					if (abstractAddress.getRegion() == MemoryRegion.GLOBAL || abstractAddress.getRegion() == MemoryRegion.STACK)
+						throw new UnknownPointerAccessException("Cannot deallocate " + abstractAddress.getRegion() + "!");
+					logger.debug(stmt.getLabel() + ": Dealloc on " + abstractAddress.getRegion());
+					post.abstractMemoryTable.setTop(abstractAddress.getRegion());
+				}
+				return Collections.singleton((AbstractState)post);
+				*/
 			}
 
 			@Override
@@ -429,14 +470,15 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLMemset stmt) {
 				logger.verbose("Found RTLMemset: " + stmt);
-				IntervalElement destination = s.abstractEval(stmt.getDestination());
 				IntervalElement value = s.abstractEval(stmt.getValue());
 				IntervalElement count = s.abstractEval(stmt.getCount());
-				logger.verbose("MemSet(dst: " + destination + ", val: " + value + ", count: " + count + ')');
+				logger.verbose("MemSet(dst: " + stmt.getDestination()+ ", val: " + value + ", count: " + count + ')');
 				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
 				if (count.hasUniqueConcretization()) {
 					for (long i = 0L; i < count.getUniqueConcretization().zExtLongValue(); i++) {
-						newState.setMemoryValue(destination.add(IntervalElement.number(i, count.getBitWidth())), value);
+						RTLExpression off = ExpressionFactory.createNumber(i, count.getBitWidth());
+						RTLMemoryLocation pos = ExpressionFactory.createMemoryLocation(ExpressionFactory.createPlus(stmt.getDestination(), off), 8);
+						newState.setMemoryValue(pos, value);
 					}
 				} else {
 					assert !Options.failFast.getValue() : "Memset with unknown count parameter: " + count;
@@ -447,15 +489,16 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLMemcpy stmt) {
 				logger.verbose("Found RTLMemcpy: " + stmt);
-				IntervalElement source = s.abstractEval(stmt.getSource());
-				IntervalElement destination = s.abstractEval(stmt.getDestination());
 				IntervalElement size = s.abstractEval(stmt.getSize());
-				logger.verbose("RTLMemcpy(src: " + source + ", dst: " + destination + ", size: " + size + ')');
+				logger.verbose("RTLMemcpy(src: " + stmt.getSource() + ", dst: " + stmt.getDestination() + ", size: " + size + ')');
 				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
 				if (size.hasUniqueConcretization()) {
 					for (long i = 0L; i < size.getUniqueConcretization().zExtLongValue(); i++) {
-						IntervalElement value = newState.getMemoryValue(source.add(IntervalElement.number(i, size.getBitWidth())), 8);
-						newState.setMemoryValue(destination.add(IntervalElement.number(i, size.getBitWidth())), value);
+						RTLExpression off = ExpressionFactory.createNumber(i, size.getBitWidth());
+						RTLMemoryLocation srcPos = ExpressionFactory.createMemoryLocation(ExpressionFactory.createPlus(stmt.getSource(), off), 8);
+						RTLMemoryLocation dstPos = ExpressionFactory.createMemoryLocation(ExpressionFactory.createPlus(stmt.getDestination(), off), 8);
+						IntervalElement value = newState.getMemoryValue(srcPos);
+						newState.setMemoryValue(dstPos, value);
 					}
 				} else {
 					assert !Options.failFast.getValue() : "Memcpy with unknown count parameter: " + size;

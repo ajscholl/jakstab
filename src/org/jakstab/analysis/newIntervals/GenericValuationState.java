@@ -14,11 +14,8 @@ import org.jakstab.util.MapMap.EntryIterator;
 import org.jakstab.util.Pair;
 import org.jakstab.util.Tuple;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> implements AbstractState, AbstractValuationState<T> {
 
@@ -31,29 +28,32 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 	private final PartitionedMemory<T> store;
 	private final AbstractDomainFactory<T> factory;
 	private final AbstractEvaluator<T> eval;
+	final AllocationCounter allocationCounter;
 	private final VariableRegion varRegions;
 
-	public GenericValuationState(GenericValuationState<T> proto) {
-		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store), proto.factory, new VariableRegion(proto.varRegions));
+	GenericValuationState(GenericValuationState<T> proto) {
+		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store), proto.factory, new VariableRegion(proto.varRegions), AllocationCounter.create(proto.allocationCounter));
 	}
 
-	public GenericValuationState(AbstractDomainFactory<T> factory) {
-		this(new VariableValuation<>(factory), new PartitionedMemory<>(factory), factory, new VariableRegion());
+	GenericValuationState(AbstractDomainFactory<T> factory) {
+		this(new VariableValuation<>(factory), new PartitionedMemory<>(factory), factory, new VariableRegion(), new AllocationCounter());
 	}
 
 	private GenericValuationState(VariableValuation<T> varVal,
 								  PartitionedMemory<T> store,
 								  AbstractDomainFactory<T> factory,
-								  VariableRegion varRegions) {
+								  VariableRegion varRegions,
+								  AllocationCounter allocationCounter) {
 		assert varVal != null;
 		assert store != null;
+		id = maxStateId;
+		incId();
 		this.varVal = varVal;
 		this.store = store;
 		this.factory = factory;
 		this.varRegions = varRegions;
+		this.allocationCounter = allocationCounter;
 		eval = new AbstractEvaluator<>(factory, this);
-		id = maxStateId;
-		incId();
 	}
 
 	private static void incId() {
@@ -64,43 +64,64 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return eval.evalExpression(e).abstractGet();
 	}
 
-	public void setMemoryValue(RTLMemoryLocation location, T value) {
-		T address = eval.evalExpression(location.getAddress()).abstractGet();
-		setMemoryValue(address, value);
+	public MemoryRegion getRegion(RTLMemoryLocation location) {
+		MemoryRegion region = null;
+		for (RTLVariable v : location.getUsedVariables()) {
+			MemoryRegion r = getVariableValue(v).getRight();
+			region = region == null ? r : region.join(r);
+		}
+		return region == null ? MemoryRegion.GLOBAL : region;
 	}
 
-	public void setMemoryValue(T address, T value) {
+	void setMemoryValue(RTLMemoryLocation location, T value) {
+		logger.debug("Setting memory location " + location + " to " + value);
+		T address = eval.evalExpression(location.getAddress()).abstractGet();
+		MemoryRegion region = getRegion(location);
+		logger.debug("Evaluated address to " + address + " in region " + region);
+		setMemoryValue(address, value, region);
+	}
+
+	void setMemoryValue(T address, T value, MemoryRegion region) {
 		int bitWidth = value.getBitWidth();
 		if (address.hasUniqueConcretization()) {
-			setMemoryValue(MemoryRegion.GLOBAL, address.getUniqueConcretization().zExtLongValue(), bitWidth, value);
+			setMemoryValue(region, address.getUniqueConcretization().zExtLongValue(), bitWidth, value);
 		}
 		if (address.isTop()) {
 			if (!store.isTop()) {
 				assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ") when writing " + address + " with value " + value + " with memory " + store;
 				for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+					// TODO region
 					store.set(entryIt.getLeftKey(), entryIt.getRightKey(), value.getBitWidth(), entryIt.getValue().join(value).abstractGet());
 				}
 			}
 			return;
 		}
 		for (BitNumber offset : address) {
-			AbstractValue oldVal = getMemoryValue(MemoryRegion.GLOBAL, offset.zExtLongValue(), bitWidth);
-			setMemoryValue(MemoryRegion.GLOBAL, offset.zExtLongValue(), bitWidth, value.join(oldVal).abstractGet());
+			AbstractValue oldVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
+			setMemoryValue(region, offset.zExtLongValue(), bitWidth, value.join(oldVal).abstractGet());
 		}
 	}
 
-	public void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
-		assert region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
+	void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
+		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
 		store.set(region, offset, bitWidth, value);
 	}
 
-	public void setVariableValue(RTLVariable var, T value, MemoryRegion region) {
+	void setVariableValue(RTLVariable var, T value, MemoryRegion region) {
 		logger.debug("Setting " + var + " to " + value + '/' + region + " in state " + id);
 		varVal.set(var, value);
 		varRegions.set(var, region);
 	}
 
-	public T getMemoryValue(T address, int bitWidth) {
+	public T getMemoryValue(RTLMemoryLocation address) {
+		logger.debug("Getting memory value at " + address);
+		T addressValue = eval.evalExpression(address.getAddress()).abstractGet();
+		MemoryRegion region = getRegion(address);
+		logger.debug("Address evaluated to " + addressValue + " in region " + region);
+		return getMemoryValue(addressValue, region, address.getBitWidth());
+	}
+
+	T getMemoryValue(T address, MemoryRegion region, int bitWidth) {
 		if (address.isTop()) {
 			return factory.top(bitWidth).abstractGet();
 		}
@@ -109,17 +130,12 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 		List<T> results = new ArrayList<>();
 		for (BitNumber offset : address) {
-			results.add(getMemoryValue(MemoryRegion.GLOBAL, offset.zExtLongValue(), bitWidth));
+			results.add(getMemoryValue(region, offset.zExtLongValue(), bitWidth));
 		}
 		return factory.delegateJoins(bitWidth, results);
 	}
 
-	public AbstractDomain<T> getMemoryValue(RTLMemoryLocation e) {
-		T iAddress = eval.evalExpression(e.getAddress()).abstractGet();
-		return getMemoryValue(iAddress, e.getBitWidth());
-	}
-
-	public T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
+	T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
 		return store.get(region, offset, bitWidth);
 	}
 
@@ -127,11 +143,11 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return new Pair<>(varVal.get(var).abstractBox(), varRegions.get(var));
 	}
 
-	public Iterator<Entry<RTLVariable, T>> variableIterator() {
+	Iterator<Entry<RTLVariable, T>> variableIterator() {
 		return varVal.iterator();
 	}
 
-	public EntryIterator<MemoryRegion, Long, T> storeIterator() {
+	EntryIterator<MemoryRegion, Long, T> storeIterator() {
 		return store.entryIterator();
 	}
 
@@ -155,7 +171,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		if (isBot() || other.isTop()) {
 			return other;
 		}
-		return new GenericValuationState<>(varVal.join(other.varVal), store.join(other.store), factory, varRegions.join(other.varRegions));
+		return new GenericValuationState<>(varVal.join(other.varVal), store.join(other.store), factory, varRegions.join(other.varRegions), allocationCounter.join(other.allocationCounter));
 	}
 
 	@Override
@@ -208,5 +224,43 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 		GenericValuationState<T> other = (GenericValuationState<T>) obj;
 		return store.equals(other.store) && varVal.equals(other.varVal) && varRegions.equals(other.varRegions);
+	}
+
+	private static final class AllocationCounter {
+		private final HashMap<Location, Integer> map;
+
+		@SuppressWarnings("unchecked")
+		public static AllocationCounter create(AllocationCounter proto) {
+			return new AllocationCounter((HashMap<Location, Integer>)proto.map.clone());
+		}
+
+		private AllocationCounter(HashMap<Location, Integer> map) {
+			this.map = map;
+		}
+
+		private AllocationCounter() {
+			this(new HashMap<Location, Integer>());
+		}
+
+		int countAllocation(Location loc) {
+			Integer count = map.get(loc);
+			if (count == null) {
+				count = 0;
+			}
+			map.put(loc, count + 1);
+			return count;
+		}
+
+		public AllocationCounter join(AllocationCounter other) {
+			Set<Location> keys = map.keySet();
+			keys.addAll(other.map.keySet());
+			HashMap<Location, Integer> newMap = new HashMap<>();
+			for (Location key : keys) {
+				Integer a = map.get(key);
+				Integer b = other.map.get(key);
+				newMap.put(key, (a != null ? a : 0) + (b != null ? b : 0) + 1);
+			}
+			return new AllocationCounter(newMap);
+		}
 	}
 }
