@@ -1,6 +1,6 @@
 package org.jakstab.analysis.newIntervals;
 
-import org.jakstab.analysis.newIntervals.word.Word;
+import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.rtl.BitVectorType;
 import org.jakstab.util.Logger;
 
@@ -52,8 +52,8 @@ public enum Bits implements BitVectorType {
 	 * @param c The second number to compare.
 	 * @return boolean
 	 */
-	public static boolean leq(Word a, Word b, Word c) {
-		boolean result = b.sub(a).lessThanOrEqual(c.sub(a));
+	public static boolean leq(BitNumber a, BitNumber b, BitNumber c) {
+		boolean result = b.sub(a).uleq(c.sub(a));
 		logger.debug(b + " <=_" + a + ' ' + c + " = " + result);
 		return result;
 	}
@@ -88,5 +88,15 @@ public enum Bits implements BitVectorType {
 			case BIT64: return val;
 			default: throw new UnsupportedOperationException("Can not narrow to an undefined bitwidth");
 		}
+	}
+
+	/**
+	 * Check if a value fits in this bitsize.
+	 *
+	 * @param val The value.
+	 * @return Whether it fits.
+	 */
+	public boolean fits(long val) {
+		return narrow(val) == val;
 	}
 }
