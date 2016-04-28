@@ -56,7 +56,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	/**
 	 * Cache for intervals, see {@link BitNumber}.
 	 */
-	private static final Map<IntervalElement, WeakReference<IntervalElement>> cache = new HashMap<>();
+	private static final List<Map<IntervalElement, WeakReference<IntervalElement>>> cache = new ArrayList<>(64);
 
 	/**
 	 * Cached empty set.
@@ -80,9 +80,12 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 
 	static {
 		// initialize the cache.
-		cache.put(TRUE_INTERVAL, new WeakReference<>(TRUE_INTERVAL));
-		cache.put(FALSE_INTERVAL, new WeakReference<>(FALSE_INTERVAL));
-		cache.put(TRUE_FALSE_INTERVAL, new WeakReference<>(TRUE_FALSE_INTERVAL));
+		for (int i = 0; i < 64; i++) {
+			cache.add(new HashMap<IntervalElement, WeakReference<IntervalElement>>());
+		}
+		cache.get(0).put(TRUE_INTERVAL, new WeakReference<>(TRUE_INTERVAL));
+		cache.get(0).put(FALSE_INTERVAL, new WeakReference<>(FALSE_INTERVAL));
+		cache.get(0).put(TRUE_FALSE_INTERVAL, new WeakReference<>(TRUE_FALSE_INTERVAL));
 	}
 
 	/**
@@ -93,15 +96,16 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 */
 	private static IntervalElement getFromCache(IntervalElement tmp) {
 		Statistic.countIntervalElementUse();
-		WeakReference<IntervalElement> found = cache.get(tmp);
+		Map<IntervalElement, WeakReference<IntervalElement>> thisCache = cache.get(tmp.bitSize - 1);
+		WeakReference<IntervalElement> found = thisCache.get(tmp);
 		if (found == null) {
-			cache.put(tmp, new WeakReference<>(tmp));
+			thisCache.put(tmp, new WeakReference<>(tmp));
 			return tmp;
 		}
 		IntervalElement result = found.get();
 		if (result == null) {
 			Statistic.countBitNumberUse();
-			cache.put(tmp, new WeakReference<>(tmp));
+			thisCache.put(tmp, new WeakReference<>(tmp));
 			return tmp;
 		}
 		Statistic.countIntervalElementReuse();
@@ -500,7 +504,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	}
 
 	public static Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression[] expressions, AbstractEvaluator<IntervalElement> s) {
-		logger.debug("projection from concretization for " + expressions.length + " expressions: " + Arrays.toString(expressions));
+		logger.debug("projection from concretization for " + expressions.length + " expressions: " + Arrays.toString(expressions) + " with evaluator " + s);
 		Tuple<Set<RTLNumber>> cValues = new Tuple<>(expressions.length);
 		for (int i = 0; i < expressions.length; i++) {
 			IntervalElement aValue = s.evalExpression(expressions[i]).abstractGet();
@@ -649,7 +653,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 * @param t The interval to check.
 	 */
 	void assertCompatible(IntervalElement t) {
-		assert bitSize == t.bitSize;
+		assert bitSize == t.bitSize : "Incompatible intervals: " + this + " and " + t;
 	}
 
 	/**
@@ -1559,7 +1563,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			assert false : "Strange sign extension: " + firstBit + " to " + lastBit + " for " + this;
 			if (result.kind == IntervalKind.INTERVAL) {
 				// create the result if the msb is sign-extended to firstBit:lastBit.
-				IntervalElement sRes = result.or(number(bitMask(firstBit, lastBit)));
+				IntervalElement sRes = result.or(number(bitMask(firstBit, lastBit), targetWidth));
 				if (result.minBits.msb() && result.maxBits.msb()) {
 					// sign bit is always present
 					return sRes;
@@ -1601,10 +1605,10 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			return result;
 		} else {
 			// this looks kinda fishy... so lets fail for the moment, remove the assert if this is a valid case...
-			assert false : "Strange zero extension: " + firstBit + " to " + lastBit + " for " + this;
+			// assert false : "Strange zero extension: " + firstBit + " to " + lastBit + " for " + this;
 			// keep only the bits from 0..firstBit-1 and lastBit+1 .. targetWidth-1, as the other bits
 			// should get set to 0 from the extension.
-			return result.and(number(bitMask(0, firstBit - 1) | bitMask(lastBit + 1, targetWidth - 1)));
+			return result.and(number(bitMask(0, firstBit - 1) | bitMask(lastBit + 1, targetWidth - 1), targetWidth));
 		}
 	}
 
@@ -1623,6 +1627,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 
 	@Override
 	public IntervalElement truncate(int bitSize) {
+		logger.debug("Truncating " + this + " to " + bitSize);
 		assert bitSize <= this.bitSize;
 		final IntervalElement result;
 		if (isBot()) {
@@ -1630,7 +1635,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		} else if (isTop()) {
 			result = top(bitSize);
 		} else {
-			BitNumber mask = BitNumber.valueOf((1L << (long)(bitSize - 1)) - 1L, bitSize);
+			BitNumber mask = BitNumber.valueOf(bit(bitSize - 1) - 1L, this.bitSize);
 			BitNumber a = minBits.shr(bitSize);
 			BitNumber b = maxBits.shr(bitSize);
 			BitNumber tMin = minBits.and(mask);
@@ -1668,6 +1673,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 * @return The shifted interval.
 	 */
 	private IntervalElement shiftSomeInterval(IntervalElement t, ShiftMode m) {
+		logger.debug("Shifting " + this + " with " + t + " with mode " + m);
 		assertCompatible(t);
 		List<IntervalElement> results = new ArrayList<>();
 		// find all possible shift amounts
@@ -1980,10 +1986,10 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			IntervalElement tmp = join(t);
 			BitNumber one = BitNumber.valueOf(1L, bitSize);
 			BitNumber two = BitNumber.valueOf(2L, bitSize);
-			if (tmp.equals(this)) {
+			if (tmp.equals(interval(minBits, t.maxBits))) {
 				result = interval(minBits, t.maxBits).join(
 						interval(minBits, maxBits.mul(two).sub(minBits).add(one)));
-			} else if (tmp.equals(t)) {
+			} else if (tmp.equals(interval(t.minBits, maxBits))) {
 				result = interval(t.minBits, maxBits).join(
 						interval(minBits.mul(two).sub(maxBits).sub(one), maxBits));
 			} else if (t.hasElement(minBits) && t.hasElement(maxBits)) {

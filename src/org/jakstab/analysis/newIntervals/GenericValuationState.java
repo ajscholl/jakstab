@@ -23,16 +23,20 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 
 	private static long maxStateId = 0L;
 
-	private final long id;
+	final long id;
 	private final VariableValuation<T> varVal;
-	private final PartitionedMemory<T> store;
+	final PartitionedMemory<T> store;
 	private final AbstractDomainFactory<T> factory;
 	private final AbstractEvaluator<T> eval;
 	final AllocationCounter allocationCounter;
 	private final VariableRegion varRegions;
 
 	GenericValuationState(GenericValuationState<T> proto) {
-		this(new VariableValuation<>(proto.varVal), new PartitionedMemory<>(proto.store), proto.factory, new VariableRegion(proto.varRegions), AllocationCounter.create(proto.allocationCounter));
+		this(new VariableValuation<>(proto.varVal),
+			 new PartitionedMemory<>(proto.store),
+			 proto.factory,
+			 new VariableRegion(proto.varRegions),
+			 AllocationCounter.create(proto.allocationCounter));
 	}
 
 	GenericValuationState(AbstractDomainFactory<T> factory) {
@@ -64,12 +68,15 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return eval.evalExpression(e).abstractGet();
 	}
 
-	public MemoryRegion getRegion(RTLMemoryLocation location) {
+	public MemoryRegion getRegion(RTLExpression location) {
+		logger.debug("Computing region for " + location);
 		MemoryRegion region = null;
 		for (RTLVariable v : location.getUsedVariables()) {
 			MemoryRegion r = getVariableValue(v).getRight();
+			logger.debug("  Found variable " + v + " with region " + r);
 			region = region == null ? r : region.join(r);
 		}
+		logger.debug("Computed region " + region);
 		return region == null ? MemoryRegion.GLOBAL : region;
 	}
 
@@ -121,7 +128,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return getMemoryValue(addressValue, region, address.getBitWidth());
 	}
 
-	T getMemoryValue(T address, MemoryRegion region, int bitWidth) {
+	private T getMemoryValue(T address, MemoryRegion region, int bitWidth) {
 		if (address.isTop()) {
 			return factory.top(bitWidth).abstractGet();
 		}
@@ -136,6 +143,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 	}
 
 	T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
+		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
 		return store.get(region, offset, bitWidth);
 	}
 
@@ -192,15 +200,23 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 	@Override
 	@SuppressWarnings("unchecked")
 	public boolean lessOrEqual(LatticeElement l) {
-		if (isBot() || l.isTop()) {
-			return true;
-		}
-		if (isTop() || l.isBot()) {
-			return false;
-		}
 		GenericValuationState<T> other = (GenericValuationState<T>) l;
-		return varVal.lessOrEqual(other.varVal) && store.lessOrEqual(other.store) && varRegions.lessOrEqual(other.varRegions);
-
+		final boolean result;
+		if (isBot() || other.isTop()) {
+			result = true;
+		} else if (isTop() || other.isBot()) {
+			result = false;
+		} else {
+			boolean vr = varVal.lessOrEqual(other.varVal);
+			boolean sr = store.lessOrEqual(other.store);
+			boolean rr = varRegions.lessOrEqual(other.varRegions);
+			result = vr && sr && rr;
+			logger.debug(varVal + " <= " + other.varVal + " = " + vr);
+			logger.debug(store + " <= " + other.store + " = " + sr);
+			logger.debug(varRegions + " <= " + other.varRegions + " = " + rr);
+		}
+		logger.debug(this + " <= " + other + " = " + result);
+		return result;
 	}
 
 	@Override
@@ -226,7 +242,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return store.equals(other.store) && varVal.equals(other.varVal) && varRegions.equals(other.varRegions);
 	}
 
-	private static final class AllocationCounter {
+	static final class AllocationCounter {
 		private final HashMap<Location, Integer> map;
 
 		@SuppressWarnings("unchecked")

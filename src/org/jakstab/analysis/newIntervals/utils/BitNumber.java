@@ -10,8 +10,6 @@ import java.math.BigInteger;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-import static sun.security.krb5.Confounder.longValue;
-
 /**
  * Integer type with variable bit width between 1 and 64. Compares using unsigned interpretation of the bit patterns, but
  * operations to operate on signed interpretations of the bit patterns exist, too.
@@ -36,7 +34,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	/**
 	 * 2^64.
 	 */
-	public static final BigInteger POW_2_64 = BigInteger.valueOf(2L).pow(64);
+	private static final BigInteger POW_2_64 = BigInteger.valueOf(2L).pow(64);
 
 	/**
 	 * Cache from DynIntegers to weak references of them. The weak hash map does not keep the
@@ -51,35 +49,6 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	static {
 		cache.put(TRUE, new WeakReference<>(TRUE));
 		cache.put(FALSE, new WeakReference<>(FALSE));
-	}
-
-	/**
-	 * Create a {@link BitNumber} from a {@link RTLNumber}.
-	 *
-	 * @param n Payload and bitsize.
-	 */
-	public BitNumber(RTLNumber n) {
-		this(n.longValue(), n.getBitWidth());
-	}
-
-	/**
-	 * Create a new {@link BitNumber} with the given payload and bitsize.
-	 *
-	 * @param val Payload.
-	 * @param bitSize Bitsize.
-	 */
-	public BitNumber(byte val, int bitSize) {
-		this((long)val & 0xFFL, bitSize);
-	}
-
-	/**
-	 * Create a new {@link BitNumber} with the given payload and bitsize.
-	 *
-	 * @param val Payload.
-	 * @param bitSize Bitsize.
-	 */
-	public BitNumber(short val, int bitSize) {
-		this((long)val & 0xFFFFL, bitSize);
 	}
 
 	/**
@@ -107,7 +76,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	}
 
 	private void assertCompatible(BitNumber b) {
-		assert bitSize == b.bitSize : "Incompatible bit sizes";
+		assert bitSize == b.bitSize : "Incompatible bit sizes in " + this + " and " + b;
 	}
 
 	/**
@@ -270,7 +239,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 		assertCompatible(b);
 		if (b.val == 0L) {
 			throw new ArithmeticException("Signed division of " + this + " by zero");
-		} else if (b.sExtLongValue() == -1L && eq(sMinVal())) {
+		} else if (b.sExtLongValue() == -1L && equals(sMinVal())) {
 			throw new ArithmeticException("Overflow in signed division of " + this + " and -1");
 		}
 		return valueOf(sExtLongValue() / b.sExtLongValue());
@@ -303,7 +272,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 		assertCompatible(b);
 		if (b.val == 0L) {
 			throw new ArithmeticException("Signed remainder of " + this + " and zero");
-		} else if (b.sExtLongValue() == -1L && eq(sMinVal())) {
+		} else if (b.sExtLongValue() == -1L && equals(sMinVal())) {
 			throw new ArithmeticException("Overflow in signed remainder of " + this + " and -1");
 		}
 		return valueOf(sExtLongValue() % b.sExtLongValue());
@@ -328,7 +297,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	 */
 	public boolean dividedBy(BitNumber b) {
 		assertCompatible(b);
-		return longValue() == 0L || b.urem(this).sExtLongValue() == 0L;
+		return zExtLongValue() == 0L || b.urem(this).sExtLongValue() == 0L;
 	}
 
 	/**
@@ -585,7 +554,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	 * @return this <=_u b.
 	 */
 	public boolean sleq(BitNumber b) {
-		return slt(b) || eq(b);
+		return slt(b) || equals(b);
 	}
 
 
@@ -596,7 +565,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	 * @return this >=_u b.
 	 */
 	public boolean uleq(BitNumber b) {
-		return ult(b) || eq(b);
+		return ult(b) || equals(b);
 	}
 
 
@@ -619,28 +588,6 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	 */
 	public boolean ugeq(BitNumber b) {
 		return !ult(b);
-	}
-
-	/**
-	 * Compare two numbers for equality.
-	 *
-	 * @param b The other number.
-	 * @return Equality.
-	 */
-	public boolean eq(BitNumber b) {
-		assertCompatible(b);
-		return equals(b);
-	}
-
-	/**
-	 * Compare two numbers for equality.
-	 *
-	 * @param b The other number.
-	 * @return Inverted Equality.
-	 */
-	public boolean neq(BitNumber b) {
-		assertCompatible(b);
-		return !equals(b);
 	}
 
 	/**
@@ -753,10 +700,10 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 			return "TRUE";
 		} else if (equals(FALSE)) {
 			return "FALSE";
-		} else if (bitSize == 64 && msb()) {
-			return unsignedBigValue().toString();
-		}
-		return Long.toString(zExtLongValue());
+		} //else if (bitSize == 64 && msb()) {
+			//return unsignedBigValue().toString(16) + '_' + bitSize;
+		//}
+		return "0x" + Long.toHexString(zExtLongValue()) + '_' + bitSize;
 	}
 
 	@Override
@@ -764,7 +711,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 		if (ult(o)) {
 			return -1;
 		}
-		if (eq(o)) {
+		if (equals(o)) {
 			return 0;
 		}
 		return 1;

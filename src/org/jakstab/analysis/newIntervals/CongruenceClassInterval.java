@@ -56,7 +56,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	/**
 	 * Cache for intervals, see {@link BitNumber}.
 	 */
-	private static final Map<CongruenceClassInterval, WeakReference<CongruenceClassInterval>> cache = new HashMap<>();
+	private static final List<Map<CongruenceClassInterval, WeakReference<CongruenceClassInterval>>> cache = new ArrayList<>(64);
 
 	/**
 	 * Cached true value.
@@ -75,9 +75,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	static {
 		// initialize the cache.
-		cache.put(TRUE_CC_INTERVAL, new WeakReference<>(TRUE_CC_INTERVAL));
-		cache.put(FALSE_CC_INTERVAL, new WeakReference<>(FALSE_CC_INTERVAL));
-		cache.put(TRUE_FALSE_CC_INTERVAL, new WeakReference<>(TRUE_FALSE_CC_INTERVAL));
+		for (int i = 0; i < 64; i++) {
+			cache.add(new HashMap<CongruenceClassInterval, WeakReference<CongruenceClassInterval>>());
+		}
+		cache.get(0).put(TRUE_CC_INTERVAL, new WeakReference<>(TRUE_CC_INTERVAL));
+		cache.get(0).put(FALSE_CC_INTERVAL, new WeakReference<>(FALSE_CC_INTERVAL));
+		cache.get(0).put(TRUE_FALSE_CC_INTERVAL, new WeakReference<>(TRUE_FALSE_CC_INTERVAL));
 	}
 
 	/**
@@ -88,15 +91,16 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 */
 	private static CongruenceClassInterval getFromCache(CongruenceClassInterval tmp) {
 		Statistic.countCCIntervalElementUse();
-		WeakReference<CongruenceClassInterval> found = cache.get(tmp);
+		Map<CongruenceClassInterval, WeakReference<CongruenceClassInterval>> thisCache = cache.get(tmp.bitSize - 1);
+		WeakReference<CongruenceClassInterval> found = thisCache.get(tmp);
 		if (found == null) {
-			cache.put(tmp, new WeakReference<>(tmp));
+			thisCache.put(tmp, new WeakReference<>(tmp));
 			return tmp;
 		}
 		CongruenceClassInterval result = found.get();
 		if (result == null) {
 			Statistic.countBitNumberUse();
-			cache.put(tmp, new WeakReference<>(tmp));
+			thisCache.put(tmp, new WeakReference<>(tmp));
 			return tmp;
 		}
 		Statistic.countCCIntervalElementReuse();

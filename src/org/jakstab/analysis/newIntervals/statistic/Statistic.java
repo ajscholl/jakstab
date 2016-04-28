@@ -57,15 +57,15 @@ public class Statistic {
 	}
 
 	static {
-		watcherThread.start();
+		//watcherThread.start();
 
 		// register a hook to print the generated statistic.
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 			@Override
 			public void run() {
-				watcherThread.interrupt();
-				List<Long> usedMemory = watcher.getUsedMemory();
-				printMemoryStatistic(usedMemory);
+				//watcherThread.interrupt();
+				//List<Long> usedMemory = watcher.getUsedMemory();
+				//printMemoryStatistic(usedMemory);
 				printStatistic();
 			}
 		}));
@@ -128,11 +128,14 @@ public class Statistic {
 		return s.toString();
 	}
 
+	public static void activateStatistic() {
+		hasNoStatistic = false;
+	}
+
 	/**
 	 * Count the number of times a BitNumber could be reused.
 	 */
 	public static void countBitNumberReuse() {
-		hasNoStatistic = false;
 		bitNumberReuseCount++;
 	}
 
@@ -140,7 +143,6 @@ public class Statistic {
 	 * Count the number of instances of bit numbers requested.
 	 */
 	public static void countBitNumberUse() {
-		hasNoStatistic = false;
 		bitNumberUseCount++;
 	}
 
@@ -148,7 +150,6 @@ public class Statistic {
 	 * Count the number of instances of bit numbers created.
 	 */
 	public static void countBitNumberCreate() {
-		hasNoStatistic = false;
 		bitNumberCreateCount++;
 	}
 
@@ -156,7 +157,6 @@ public class Statistic {
 	 * Count the number of times an IntervalElement could be reused.
 	 */
 	public static void countIntervalElementReuse() {
-		hasNoStatistic = false;
 		intervalElementReuseCount++;
 	}
 
@@ -164,7 +164,6 @@ public class Statistic {
 	 * Count the number of instances of interval elements requested.
 	 */
 	public static void countIntervalElementUse() {
-		hasNoStatistic = false;
 		intervalElementUseCount++;
 	}
 
@@ -172,7 +171,6 @@ public class Statistic {
 	 * Count the number of instances of interval elements created.
 	 */
 	public static void countIntervalElementCreate() {
-		hasNoStatistic = false;
 		intervalElementCreateCount++;
 	}
 
@@ -180,7 +178,6 @@ public class Statistic {
 	 * Count the number of times an CongruenceClassInterval could be reused.
 	 */
 	public static void countCCIntervalElementReuse() {
-		hasNoStatistic = false;
 		ccIntervalElementReuseCount++;
 	}
 
@@ -188,7 +185,6 @@ public class Statistic {
 	 * Count the number of instances of cc-interval elements requested.
 	 */
 	public static void countCCIntervalElementUse() {
-		hasNoStatistic = false;
 		ccIntervalElementUseCount++;
 	}
 
@@ -196,7 +192,6 @@ public class Statistic {
 	 * Count the number of instances of cc-interval elements created.
 	 */
 	public static void countCCIntervalElementCreate() {
-		hasNoStatistic = false;
 		ccIntervalElementCreateCount++;
 	}
 

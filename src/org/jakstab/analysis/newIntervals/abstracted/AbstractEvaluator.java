@@ -24,6 +24,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 	}
 
 	public AbstractDomain<T> evalExpression(RTLExpression e) {
+		logger.debug("Evaluating " + e);
 		final int bitSize = e.getBitWidth();
 		if (bitSize <= 0) {
 			// make sure BitRanges supply valid sizes
@@ -33,12 +34,18 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 
 			@Override
 			public AbstractDomain<T> visit(RTLBitRange e) {
-				T startBit = evalExpression(e.getFirstBitIndex()).abstractGet();
-				AbstractDomain<T> endBit = evalExpression(e.getLastBitIndex());
+				logger.debug("Evaluating bit range with " + e.getFirstBitIndex() + " and " + e.getLastBitIndex() + " for operand " + e.getOperand());
 				AbstractDomain<T> value = evalExpression(e.getOperand());
+				logger.debug("  Evaluated operand to " + value);
+				T startBit = evalExpression(e.getFirstBitIndex()).cast(value.getBitWidth()).abstractGet();
+				logger.debug("  Evaluated start bit to " + startBit);
+				AbstractDomain<T> endBit = evalExpression(e.getLastBitIndex()).cast(value.getBitWidth());
+				logger.debug("  Evaluated end bit to " + endBit);
 				AbstractDomain<T> one = factory.number(1L, endBit.getBitWidth());
 				T mask = one.shl(endBit.sub(startBit).add(one.abstractGet()).abstractGet()).sub(one.abstractGet()).shl(startBit).abstractGet();
+				logger.debug("  Computed mask as " + mask);
 				AbstractDomain<T> result = value.and(mask).shr(startBit);
+				logger.debug("  Computed result as " + result);
 				return result.cast(bitSize);
 			}
 
@@ -80,8 +87,8 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 			public AbstractDomain<T> visit(RTLOperation e) {
 				RTLExpression[] args = e.getOperands();
 				List<AbstractDomain<T>> iArgs = new ArrayList<>(args.length);
-				for (int i = 0; i < args.length; i++) {
-					iArgs.add(evalExpression(args[i]));
+				for (RTLExpression arg : args) {
+					iArgs.add(evalExpression(arg));
 				}
 				long w = (long)bitSize;
 				AbstractDomain<T> op0, op1, op2;
@@ -197,25 +204,25 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 					// Bitwise shift operations
 					case SHR:
 						assert args.length == 2;
-						return iArgs.get(0).shr(iArgs.get(1).abstractGet());
+						return iArgs.get(0).shr(iArgs.get(1).zeroExtend(bitSize).abstractGet());
 					case SAR:
 						assert args.length == 2;
-						return iArgs.get(0).sar(iArgs.get(1).abstractGet());
+						return iArgs.get(0).sar(iArgs.get(1).zeroExtend(bitSize).abstractGet());
 					case SHL:
 						assert args.length == 2;
-						return iArgs.get(0).shl(iArgs.get(1).abstractGet());
+						return iArgs.get(0).shl(iArgs.get(1).zeroExtend(bitSize).abstractGet());
 					case ROL:
 						// a rol b ==> a shl b | a sar (w - b)
 						assert args.length == 2;
 						op0 = iArgs.get(0);
-						op1 = iArgs.get(1);
+						op1 = iArgs.get(1).zeroExtend(bitSize);
 						op2 = factory.interval(w, w, bitSize); // w
 						return op0.shl(op1.abstractGet()).or(op0.sar(op2.sub(op1.abstractGet()).abstractGet()).abstractGet());
 					case ROR:
 						// a ror b ==> a sar b | a shl (w - b)
 						assert args.length == 2;
 						op0 = iArgs.get(0);
-						op1 = iArgs.get(1);
+						op1 = iArgs.get(1).zeroExtend(bitSize);
 						op2 = factory.interval(w, w, bitSize); // w
 						return op0.sar(op1.abstractGet()).or(op0.shl(op2.sub(op1.abstractGet()).abstractGet()).abstractGet());
 				}
@@ -237,5 +244,10 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 		AbstractDomain<T> result = e.accept(visitor);
 		logger.debug("evalExpression returned: " + result + " for " + e);
 		return result;
+	}
+
+	@Override
+	public String toString() {
+		return s.toString();
 	}
 }

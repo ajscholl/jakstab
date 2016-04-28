@@ -4,16 +4,15 @@ import org.jakstab.AnalysisProperties;
 import org.jakstab.Options;
 import org.jakstab.analysis.*;
 import org.jakstab.analysis.newIntervals.abstracted.AbstractDomain;
+import org.jakstab.analysis.newIntervals.statistic.Statistic;
 import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.cfa.CFAEdge;
 import org.jakstab.cfa.Location;
 import org.jakstab.cfa.StateTransformer;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
-import org.jakstab.util.IterableIterator;
-import org.jakstab.util.Logger;
+import org.jakstab.util.*;
 import org.jakstab.util.MapMap.EntryIterator;
-import org.jakstab.util.Pair;
 
 import java.util.Collections;
 import java.util.Map.Entry;
@@ -35,6 +34,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
     private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
 
     public IntervalAnalysis() {
+		Statistic.activateStatistic();
 		logger.debug("Started new interval analysis");
     }
 
@@ -366,7 +366,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 	}
 
 	public static Set<AbstractState> abstractPost(final RTLStatement statement, final GenericValuationState<IntervalElement> s) {
-		logger.verbose("start processing abstractPost(" + statement + ") " + statement.getLabel());
+		logger.info("start processing abstractPost(" + statement + ") " + statement.getLabel());
 
 		Set<AbstractState> res = statement.accept(new DefaultStatementVisitor<Set<AbstractState>>() {
 
@@ -374,9 +374,11 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			public Set<AbstractState> visit(RTLVariableAssignment stmt) {
 				logger.verbose("Found RTLVariableAssignment: " + stmt);
 				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				RTLVariable v = stmt.getLeftHandSide();
 				IntervalElement rhs = s.abstractEval(stmt.getRightHandSide());
-				newState.setVariableValue(stmt.getLeftHandSide(), rhs, newState.getVariableValue(stmt.getLeftHandSide()).getRight());
-				logger.verbose("Set " + stmt.getLeftHandSide() + " = " + rhs);
+				MemoryRegion region = newState.getRegion(stmt.getRightHandSide());
+				newState.setVariableValue(v, rhs, region);
+				logger.verbose("Set " + v + " = " + rhs + " and new region " + region);
 				return Collections.singleton((AbstractState) newState);
 			}
 
@@ -411,7 +413,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				} else {
 					newRegion = MemoryRegion.create("alloc" + stmt.getLabel() + '#' + newState.allocationCounter.countAllocation(stmt.getLabel()));
 				}
-				logger.debug("Allocated region " + newRegion);
+				logger.verbose("Allocated region " + newRegion);
 
 				// We also allow pointers of less than the actual address size, to emulate the 16 bit segment registers FS/GS
 				// FS gets a value of (FS, 0) in the prologue.
@@ -429,26 +431,23 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 
 			@Override
 			public Set<AbstractState> visit(RTLDealloc stmt) {
-				logger.verbose("Ignoring RTLDealloc: " + stmt);
-				return Collections.singleton((AbstractState) s); //TODO
+				logger.verbose("Found RTLDealloc: " + stmt);
+				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				IntervalElement abstractAddress = newState.abstractEval(stmt.getPointer());
 
-				/*
-				BDDState post = copyThisState();
-				BDDSet abstractAddress = abstractEval(stmt.getPointer());
 				// if the address cannot be determined, set all store memory to TOP
 				if (abstractAddress.isTop()) {
-					logger.info(getIdentifier() + ": Cannot resolve location of deallocated memory pointer " + stmt.getPointer() + ". Might miss use after free bugs!");
-					//logger.info(getIdentifier() + ": Cannot resolve location of deallocated memory pointer " + stmt.getPointer() + ". Defaulting ALL memory to " + Characters.TOP);
-					//logger.info(BasedNumberValuation.this);
-					//post.aStore.setTop();
+					logger.info(newState + ": Cannot resolve location of deallocated memory pointer " + stmt.getPointer() + ". Defaulting ALL memory to TOP!");
+					newState.store.setTop();
 				} else {
-					if (abstractAddress.getRegion() == MemoryRegion.GLOBAL || abstractAddress.getRegion() == MemoryRegion.STACK)
-						throw new UnknownPointerAccessException("Cannot deallocate " + abstractAddress.getRegion() + "!");
-					logger.debug(stmt.getLabel() + ": Dealloc on " + abstractAddress.getRegion());
-					post.abstractMemoryTable.setTop(abstractAddress.getRegion());
+					MemoryRegion region = newState.getRegion(stmt.getPointer());
+					if (region.equals(MemoryRegion.GLOBAL) || region.equals(MemoryRegion.STACK)) {
+						throw new UnknownPointerAccessException("Cannot deallocate " + region + '!');
+					}
+					logger.verbose(stmt.getLabel() + ": Dealloc on " + region);
+					newState.store.setTop(region);
 				}
-				return Collections.singleton((AbstractState)post);
-				*/
+				return Collections.singleton((AbstractState)newState);
 			}
 
 			@Override
@@ -482,6 +481,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 					}
 				} else {
 					assert !Options.failFast.getValue() : "Memset with unknown count parameter: " + count;
+					newState = new GenericValuationState<>(IntervalElementFactory.getFactory());
 				}
 				return Collections.singleton((AbstractState) newState);
 			}
@@ -501,7 +501,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 						newState.setMemoryValue(dstPos, value);
 					}
 				} else {
-					assert !Options.failFast.getValue() : "Memcpy with unknown count parameter: " + size;
+					assert !Options.failFast.getValue() : "Memcpy with unknown size parameter: " + size;
+					newState = new GenericValuationState<>(IntervalElementFactory.getFactory());
 				}
 				return Collections.singleton((AbstractState) newState);
 			}
@@ -514,14 +515,21 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			}
 		});
 
-		logger.debug("finished abstractPost(" + statement + ") in state: " + s + " with result: " + res);
+		logger.verbose("finished abstractPost(" + statement + ") in state: " + s + " with result: " + res);
 		return res;
 	}
 
     @Override
+	@SuppressWarnings("unchecked")
     public AbstractState strengthen(AbstractState s, Iterable<AbstractState> otherStates,
                                     CFAEdge cfaEdge, Precision precision) {
-		logger.debug("Failing to strengthen (not implemented)");
+		logger.debug("Strengthening " + s + " at edge " + cfaEdge + " with precision " + precision);
+		boolean couldStrengthen = false;
+		for (AbstractState other : otherStates) {
+			logger.debug("  With state (" + other.getClass() + ") " + other);
+			couldStrengthen |= other instanceof GenericValuationState && ((GenericValuationState<IntervalElement>)other).id != ((GenericValuationState<IntervalElement>)s).id;
+		}
+		assert !couldStrengthen : "Could actually strengthen here";
         return s; //TODO actually implement something
     }
 
@@ -534,7 +542,12 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 
     @Override
     public boolean stop(AbstractState s, ReachedSet reached, Precision precision) {
-		logger.debug("Stop-Join");
-        return CPAOperators.stopJoin(s, reached, precision);
+		boolean stop = CPAOperators.stopJoin(s, reached, precision);
+		logger.debug("Stop-Join for state " + s +
+				"\nwith reached set " + reached +
+				"\nempty = " + reached.isEmpty() +
+				"\nand joinAll = " + Lattices.joinAll(reached) +
+				"\nand precision " + precision + " = " + stop);
+        return stop;
     }
 }
