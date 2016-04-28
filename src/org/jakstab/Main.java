@@ -18,30 +18,33 @@
 
 package org.jakstab;
 
-import java.io.*;
-import java.util.*;
-
-import org.jakstab.transformation.DeadCodeElimination;
-import org.jakstab.transformation.ExpressionSubstitution;
-import org.jakstab.util.*;
+import antlr.ANTLRException;
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.SetMultimap;
 import org.jakstab.analysis.*;
 import org.jakstab.analysis.composite.CompositeState;
 import org.jakstab.analysis.explicit.BasedNumberValuation;
 import org.jakstab.analysis.explicit.BoundedAddressTracking;
 import org.jakstab.analysis.procedures.ProcedureAnalysis;
 import org.jakstab.analysis.procedures.ProcedureState;
-import org.jakstab.asm.*;
+import org.jakstab.asm.AbsoluteAddress;
 import org.jakstab.cfa.ControlFlowGraph;
 import org.jakstab.cfa.IntraproceduralCFG;
 import org.jakstab.cfa.Location;
-import org.jakstab.loader.*;
+import org.jakstab.loader.BinaryParseException;
+import org.jakstab.loader.DefaultHarness;
+import org.jakstab.loader.HeuristicHarness;
 import org.jakstab.rtl.expressions.ExpressionFactory;
 import org.jakstab.ssl.Architecture;
+import org.jakstab.transformation.DeadCodeElimination;
+import org.jakstab.transformation.ExpressionSubstitution;
+import org.jakstab.util.*;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.SetMultimap;
-
-import antlr.ANTLRException;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.*;
 
 public class Main {
 
@@ -51,7 +54,7 @@ public class Main {
 
 	private static volatile Algorithm activeAlgorithm;
 	private static volatile Thread mainThread;
-	
+
 	public static void logBanner() {
 		logger.error(Characters.DOUBLE_LINE_FULL_WIDTH);
 		logger.error("   Jakstab " + version);
@@ -62,15 +65,15 @@ public class Main {
 		logger.error("   Refer to LICENSE for details.");
 		logger.error(Characters.DOUBLE_LINE_FULL_WIDTH);
 	}
-	
+
 	public static void main(String[] args) {
 
 		mainThread = Thread.currentThread();
 		StatsTracker stats = StatsTracker.getInstance();
-		
+
 		// Parse command line before first use of logger
 		Options.parseOptions(args);
-		
+
 		logBanner();
 
 		/////////////////////////
@@ -96,7 +99,7 @@ public class Main {
 
 		File mainFile = new File(Options.mainFilename).getAbsoluteFile();
 
-		String baseFileName = null; 
+		String baseFileName = null;
 
 		try {
 			// Load additional modules
@@ -104,7 +107,7 @@ public class Main {
 				logger.warn("Parsing " + moduleName + "...");
 				File moduleFile = new File(moduleName).getAbsoluteFile();
 				program.loadModule(moduleFile);
-				
+
 				// If we are processing drivers, use the driver's name as base name
 				if (Options.wdm.getValue() && moduleFile.getName().toLowerCase().endsWith(".sys")) {
 					baseFileName = getBaseFileName(moduleFile);
@@ -113,7 +116,7 @@ public class Main {
 			// Load main module last
 			logger.warn("Parsing " + Options.mainFilename + "...");
 			program.loadMainModule(mainFile);
-			
+
 			// Use main module as base name if we have none yet
 			if (baseFileName == null)
 				baseFileName = getBaseFileName(mainFile);
@@ -142,7 +145,7 @@ public class Main {
 			program.setEntrySymbol(start);
 		}
 
-		// Add surrounding "%DF := 1; call entrypoint; halt;" 
+		// Add surrounding "%DF := 1; call entrypoint; halt;"
 		program.installHarness(Options.heuristicEntryPoints.getValue() ? new HeuristicHarness() : new DefaultHarness());
 
 		int slashIdx = baseFileName.lastIndexOf('\\');
@@ -154,8 +157,8 @@ public class Main {
 
 
 		//StatsPlotter.create(baseFileName + "_states.dat");
-		//StatsPlotter.plot("#Time(ms)\tStates\tInstructions\tGC Time\tSpeed(st/s)");		
-		
+		//StatsPlotter.plot("#Time(ms)\tStates\tInstructions\tGC Time\tSpeed(st/s)");
+
 		// Catches control-c and System.exit
 		Thread shutdownThread = new Thread() {
 			@Override
@@ -176,19 +179,19 @@ public class Main {
 		// Add shutdown on return pressed for eclipse
 		if (!Options.background.getValue() && System.console() == null) {
 			logger.info("No console detected (eclipse?). Press return to terminate analysis and print statistics.");
-			Thread eclipseShutdownThread = new Thread() { 
-				public void run() { 
-					try { 
-						System.in.read(); 
-					} catch (IOException e) { 
-						e.printStackTrace(); 
-					} 
+			Thread eclipseShutdownThread = new Thread() {
+				public void run() {
+					try {
+						System.in.read();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 					System.exit(1);
-				} 
+				}
 			};
 			eclipseShutdownThread.start();
 		}
-		
+
 
 		// Necessary to stop shutdown thread on exceptions being thrown
 		try {
@@ -233,10 +236,13 @@ public class Main {
 			if (Options.outputLocationsWithMostStates.getValue()) reached.logHighestStateCounts(10);
 
 			if (!cfr.isCompleted()) {
+				logger.printLastLog();
 				logger.error(Characters.starredBox("WARNING: Analysis interrupted, CFG might be incomplete!"));
+				Logger.clearLastLog();
 			}
 
 			if (!cfr.isSound()) {
+				logger.printLastLog();
 				logger.error(Characters.starredBox("WARNING: Analysis was unsound!"));
 			}
 
@@ -270,7 +276,7 @@ public class Main {
 			logger.debug("   Variable count:                      " + String.format("%8d", ExpressionFactory.getVariableCount()));
 			logger.error(Characters.DOUBLE_LINE_FULL_WIDTH);
 
-			
+
 			stats.record(program.getInstructionCount());
 			stats.record(program.getStatementCount());
 			stats.record(program.getCFG().numEdges());
@@ -287,13 +293,13 @@ public class Main {
 			stats.record(Options.summarizeRep.getValue() ? "y" : "n" );
 			stats.record(BasedNumberValuation.ExplicitPrintfArgs);
 			stats.record(BasedNumberValuation.OverAppPrintfArgs);
-			
+
 			stats.print();
 
 			ProgramGraphWriter graphWriter = new ProgramGraphWriter(program);
-			
+
 			graphWriter.writeDisassembly(baseFileName + "_jak.asm");
-			
+
 			/*if (Options.cpas.getValue().contains("v")) {
 				graphWriter.writeVpcGraph(baseFileName + "_vilcfg", cfr.getART());
 				graphWriter.writeVpcBasicBlockGraph(baseFileName + "_vcfg", cfr.getART());
@@ -304,33 +310,33 @@ public class Main {
 				if (!Options.noGraphs.getValue()) {
 					graphWriter.writeControlFlowAutomaton(program.getCFG(), baseFileName + "_cfa");
 					graphWriter.writeAssemblyBasicBlockGraph(program.getCFG(), baseFileName + "_asmcfg");
-					
+
 					if (!Options.procedureGraph.getValue().equals("")) {
 						String proc = Options.procedureGraph.getValue();
 						ControlFlowGraph intraCFG = new IntraproceduralCFG(program.getCFG(), proc);
 						graphWriter.writeAssemblyBasicBlockGraph(intraCFG, baseFileName + "_" + proc + "_asmcfg");
 						graphWriter.writeTopologyGraph(intraCFG, baseFileName + "_" + proc + "_topo");
 					}
-					
+
 					//graphWriter.writeAssemblyCFG(baseFileName + "_asmcfg");
 				}
 				//if (Options.errorTrace) graphWriter.writeART(baseFileName + "_art", cfr.getART());
 			} else {
-				// If control flow reconstruction finished normally and other analyses are configured, start them now 
+				// If control flow reconstruction finished normally and other analyses are configured, start them now
 
 				// Simplify CFA
 				logger.info("=== Simplifying CFA ===");
 				DeadCodeElimination dce;
 				ExpressionSubstitution subst = new ExpressionSubstitution(program.getCFG());
 				runAlgorithm(subst);
-				dce = new DeadCodeElimination(subst.getCFA(), false); 
+				dce = new DeadCodeElimination(subst.getCFA(), false);
 				runAlgorithm(dce);
 				logger.info("=== Finished CFA simplification, removed " + dce.getRemovalCount() + " edges. ===");
 				program.setCFA(dce.getCFA());
 
-				AnalysisManager mgr = AnalysisManager.getInstance();				
+				AnalysisManager mgr = AnalysisManager.getInstance();
 				List<ConfigurableProgramAnalysis> secondaryCPAs = new LinkedList<ConfigurableProgramAnalysis>();
-				for (int i=0; i<Options.secondaryCPAs.getValue().length(); i++) {			
+				for (int i=0; i<Options.secondaryCPAs.getValue().length(); i++) {
 					ConfigurableProgramAnalysis cpa = mgr.createAnalysis(Options.secondaryCPAs.getValue().charAt(i));
 					if (cpa != null) {
 						AnalysisProperties p = mgr.getProperties(cpa);
@@ -371,7 +377,7 @@ public class Main {
 			if (cfr.isCompleted() && Options.procedureAbstraction.getValue() == 2) {
 				cfr = null;
 				reached = null;
-				ProcedureAnalysis procedureAnalysis = new ProcedureAnalysis();		
+				ProcedureAnalysis procedureAnalysis = new ProcedureAnalysis();
 				CPAAlgorithm cpaAlg = CPAAlgorithm.createForwardAlgorithm(program.getCFG(), procedureAnalysis);
 				runAlgorithm(cpaAlg);
 				reached = cpaAlg.getReachedStates().select(1);
@@ -385,7 +391,7 @@ public class Main {
 				for (Pair<Location,Location> callSite : procedureAnalysis.getCallSites()) {
 					ProcedureState procedureState = (ProcedureState)Lattices.joinAll(reached.where(callSite.getLeft()));
 					for (Location procedure : procedureState.getProcedureEntries()) {
-						callGraph.put(procedure, callSite.getRight()); 
+						callGraph.put(procedure, callSite.getRight());
 					}
 				}
 				logger.info("Found " + procedures.size() + " function entry points from procedure analysis.");
@@ -394,7 +400,7 @@ public class Main {
 					graphWriter.writeCallGraph(baseFileName + "_callgraph", callGraph);
 			}
 
-			 
+
 
 			// Kills the keypress-monitor-thread.
 			try {
@@ -405,6 +411,7 @@ public class Main {
 			}
 		} catch (Throwable e) {
 			System.out.flush();
+			logger.printLastLog();
 			e.printStackTrace();
 			Runtime.getRuntime().removeShutdownHook(shutdownThread);
 			// Kills eclipse shutdown thread
@@ -431,11 +438,11 @@ public class Main {
 			logger.error("Cannot write to outputfile!", e);
 		}
 	}
-	
+
 	private static String getBaseFileName(File file) {
 		String baseFileName = file.getAbsolutePath();
 		// Get name of the analyzed file without file extension if it has one
-		if (file.getName().contains(".")) { 
+		if (file.getName().contains(".")) {
 			int dotIndex = file.getPath().lastIndexOf('.');
 			if (dotIndex > 0) {
 				baseFileName = file.getPath().substring(0, dotIndex);
