@@ -24,7 +24,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 	}
 
 	public AbstractDomain<T> evalExpression(RTLExpression e) {
-		logger.debug("Evaluating " + e);
+		logger.verbose("Evaluating " + e);
 		final int bitSize = e.getBitWidth();
 		if (bitSize <= 0) {
 			// make sure BitRanges supply valid sizes
@@ -42,6 +42,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 				AbstractDomain<T> endBit = evalExpression(e.getLastBitIndex()).cast(value.getBitWidth());
 				logger.debug("  Evaluated end bit to " + endBit);
 				AbstractDomain<T> one = factory.number(1L, endBit.getBitWidth());
+				// (1 << (endBit - startBit + 1) - 1) << startBit
 				T mask = one.shl(endBit.sub(startBit).add(one.abstractGet()).abstractGet()).sub(one.abstractGet()).shl(startBit).abstractGet();
 				logger.debug("  Computed mask as " + mask);
 				AbstractDomain<T> result = value.and(mask).shr(startBit);
@@ -242,7 +243,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 			}
 		};
 		AbstractDomain<T> result = e.accept(visitor);
-		logger.debug("evalExpression returned: " + result + " for " + e);
+		logger.verbose("evalExpression returned: " + result + " for " + e);
 		return result;
 	}
 

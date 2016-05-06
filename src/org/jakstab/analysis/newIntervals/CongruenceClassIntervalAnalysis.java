@@ -19,25 +19,25 @@ import org.jakstab.util.Pair;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.jakstab.analysis.newIntervals.IntervalElement.*;
+import static org.jakstab.analysis.newIntervals.CongruenceClassInterval.*;
 
 @SuppressWarnings("Unused")
-public class IntervalAnalysis implements ConfigurableProgramAnalysis {
+public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnalysis {
 
-	public static JOption<Integer> threshold = JOption.create("interval-threshold", "k", 3, "Sets the threshold used in merge and prec for intervals.");
+	public static JOption<Integer> threshold = JOption.create("cc-interval-threshold", "k", 3, "Sets the threshold used in merge and prec for cc-intervals.");
 
     public static void register(AnalysisProperties p) {
-        p.setShortHand('j');
-        p.setName("Signedness Agnostic Interval analysis");
-        p.setDescription("Compute intervals without sign information.");
+        p.setShortHand('m');
+        p.setName("Signedness Agnostic Interval Analysis with Congruence Classes");
+        p.setDescription("Compute intervals and congruence classes without needing sign information.");
         p.setExplicit(true);
     }
 
-    private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
+    private static final Logger logger = Logger.getLogger(CongruenceClassIntervalAnalysis.class);
 
-    public IntervalAnalysis() {
+    public CongruenceClassIntervalAnalysis() {
 		Statistic.activateStatistic();
-		logger.debug("Started new interval analysis");
+		logger.debug("Started new cc-interval analysis");
     }
 
     @Override
@@ -49,7 +49,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
     @Override
     public AbstractState initStartState(Location label) {
 		logger.debug("Initialized default state");
-		return new GenericValuationState<>(IntervalElementFactory.getFactory());
+		return new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory());
     }
 
     @Override
@@ -63,7 +63,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		if (p.getCount() >= threshold.getValue()) {
 			//widen
 			logger.warn("Will widen now");
-			return ((GenericValuationState<IntervalElement>) s1).widen((GenericValuationState<IntervalElement>) s2);
+			return ((GenericValuationState<CongruenceClassInterval>) s1).widen((GenericValuationState<CongruenceClassInterval>) s2);
 		} else {
 			return CPAOperators.mergeJoin(s1, s2, precision);
 		}
@@ -72,28 +72,28 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
     @Override
 	@SuppressWarnings("unchecked")
     public Set<AbstractState> post(final AbstractState state, CFAEdge cfaEdge, Precision precision) {
-		return abstractPost((RTLStatement) cfaEdge.getTransformer(), (GenericValuationState<IntervalElement>) state);
+		return abstractPost((RTLStatement) cfaEdge.getTransformer(), (GenericValuationState<CongruenceClassInterval>) state);
    }
 
-	private static GenericValuationState<IntervalElement> assumeNeq(RTLExpression arg, IntervalElement newInt, GenericValuationState<IntervalElement> newState) {
+	private static GenericValuationState<CongruenceClassInterval> assumeNeq(RTLExpression arg, CongruenceClassInterval newInt, GenericValuationState<CongruenceClassInterval> newState) {
 		if (arg instanceof RTLVariable) {
 			if (newInt.hasUniqueConcretization()) {
 				BitNumber val = newInt.getUniqueConcretization();
 				RTLVariable var = (RTLVariable) arg;
-				Pair<AbstractDomain<IntervalElement>, MemoryRegion> oldVal = newState.getVariableValue(var);
-				IntervalElement oldInt = oldVal.getLeft().abstractGet();
+				Pair<AbstractDomain<CongruenceClassInterval>, MemoryRegion> oldVal = newState.getVariableValue(var);
+				CongruenceClassInterval oldInt = oldVal.getLeft().abstractGet();
 				oldInt.assertCompatible(newInt);
 				if (oldInt.isBot()) {
 					// do nothing, is already bottom
 					logger.debug("Can not use " + arg + " != " + newInt + ", " + arg + " is BOT");
 				} else if (oldInt.isTop()) {
 					// can be anything... but we know it is NOT newInt
-					newState.setVariableValue(var, newInt.invert(), oldVal.getRight());
-				} else if (val.equals(oldInt.minBits)) {
-					IntervalElement newInfo = interval(oldInt.minBits.inc(), oldInt.maxBits);
+					newState.setVariableValue(var, zeroInterval(newInt.range.invert()), oldVal.getRight());
+				} else if (val.equals(oldInt.range.minBits)) {
+					CongruenceClassInterval newInfo = zeroInterval(IntervalElement.interval(oldInt.range.minBits.inc(), oldInt.range.maxBits));
 					newState.setVariableValue(var, oldInt.meet(newInfo), oldVal.getRight());
-				} else if (val.equals(oldInt.maxBits)) {
-					IntervalElement newInfo = interval(oldInt.minBits, oldInt.maxBits.dec());
+				} else if (val.equals(oldInt.range.maxBits)) {
+					CongruenceClassInterval newInfo = zeroInterval(IntervalElement.interval(oldInt.range.minBits, oldInt.range.maxBits.dec()));
 					newState.setVariableValue(var, oldInt.meet(newInfo), oldVal.getRight());
 				} else {
 					logger.debug("Can not use information in " + arg + ' ' + oldInt + " != " + newInt);
@@ -105,11 +105,11 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			switch (e.getOperator()) {
 				case NEG:
 					assert args.length == 1;
-					newState = assumeNeq(args[0], newInt.negate(), newState);
+					newState = assumeNeq(args[0], newInt.negate().abstractGet(), newState);
 					break;
 				case NOT:
 					assert args.length == 1;
-					newState = assumeNeq(args[0], newInt.not(), newState);
+					newState = assumeNeq(args[0], newInt.not().abstractGet(), newState);
 					break;
 				default:
 					logger.warn("Ignoring equality in operation: " + arg + " != " + newInt);
@@ -121,11 +121,11 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 	}
 
 
-	private static GenericValuationState<IntervalElement> assumeEq(RTLExpression arg, IntervalElement newInt, GenericValuationState<IntervalElement> newState) {
+	private static GenericValuationState<CongruenceClassInterval> assumeEq(RTLExpression arg, CongruenceClassInterval newInt, GenericValuationState<CongruenceClassInterval> newState) {
 		if (arg instanceof RTLVariable) {
 			RTLVariable var = (RTLVariable) arg;
-			Pair<AbstractDomain<IntervalElement>, MemoryRegion> oldVal = newState.getVariableValue(var);
-			IntervalElement oldInt = oldVal.getLeft().abstractGet();
+			Pair<AbstractDomain<CongruenceClassInterval>, MemoryRegion> oldVal = newState.getVariableValue(var);
+			CongruenceClassInterval oldInt = oldVal.getLeft().abstractGet();
 			newState.setVariableValue(var, oldInt.meet(newInt), oldVal.getRight());
 		} else if (arg instanceof RTLOperation) {
 			RTLOperation e = (RTLOperation) arg;
@@ -133,23 +133,23 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			switch (e.getOperator()) {
 				case NEG:
 					assert args.length == 1;
-					newState = assumeEq(args[0], newInt.negate(), newState);
+					newState = assumeEq(args[0], newInt.negate().abstractGet(), newState);
 					break;
 				case NOT:
 					assert args.length == 1;
-					newState = assumeEq(args[0], newInt.not(), newState);
+					newState = assumeEq(args[0], newInt.not().abstractGet(), newState);
 					break;
 				case PLUS:
 					assert args.length > 1;
-					IntervalElement[] iArgs = new IntervalElement[args.length];
+					CongruenceClassInterval[] iArgs = new CongruenceClassInterval[args.length];
 					for (int i = 0; i < args.length; i++) {
 						iArgs[i] = newState.abstractEval(args[i]);
 					}
 					for (int i = 0; i < args.length; i++) {
-						IntervalElement newRes = newInt;
+						CongruenceClassInterval newRes = newInt;
 						for (int j = 0; j < args.length; j++) {
 							if (i != j) {
-								newRes = newRes.sub(iArgs[j]);
+								newRes = newRes.sub(iArgs[j]).abstractGet();
 							}
 						}
 						newState = assumeEq(args[i], newRes, newState);
@@ -164,8 +164,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		return newState;
 	}
 
-	private static GenericValuationState<IntervalElement> assumeFalse(RTLExpression e, GenericValuationState<IntervalElement> newState) {
-		IntervalElement assumeVal = newState.abstractEval(e);
+	private static GenericValuationState<CongruenceClassInterval> assumeFalse(RTLExpression e, GenericValuationState<CongruenceClassInterval> newState) {
+		CongruenceClassInterval assumeVal = newState.abstractEval(e);
 		logger.debug("Assuming " + e + " not to hold");
 		assert !assumeVal.isBot() : "Bottoming state reached with " + e + " and " + newState;
 		if (assumeVal.hasUniqueConcretization()) {
@@ -176,7 +176,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		if (e instanceof RTLOperation) {
 			RTLOperation op = (RTLOperation) e;
 			RTLExpression[] args = op.getOperands();
-			IntervalElement op0, op1;
+			CongruenceClassInterval op0, op1;
 			switch (op.getOperator()) {
 				case UNKNOWN:
 					assert !Options.failFast.getValue() : "Assuming UNKNOWN operator";
@@ -232,7 +232,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			return assumeFalse(ExpressionFactory.createOr(ExpressionFactory.createAnd(cond, t),ExpressionFactory.createAnd(negCond, f)), newState);
 		} else if (e instanceof RTLMemoryLocation) {
 			RTLMemoryLocation m = (RTLMemoryLocation) e;
-			newState.setMemoryValue(m, FALSE_INTERVAL);
+			newState.setMemoryValue(m, FALSE_CC_INTERVAL);
 			return newState;
 		} else if (e instanceof RTLNondet) {
 			// this does not really help, but well...
@@ -244,15 +244,15 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			return newState;
 		} else if (e instanceof RTLVariable) {
 			RTLVariable v = (RTLVariable) e;
-			newState.setVariableValue(v, FALSE_INTERVAL, newState.getVariableValue(v).getRight());
+			newState.setVariableValue(v, FALSE_CC_INTERVAL, newState.getVariableValue(v).getRight());
 			return newState;
 		} else {
 			throw new AssertionError("Unknown assumption " + e);
 		}
 	}
 
-	private static GenericValuationState<IntervalElement> assumeTrue(RTLExpression e, GenericValuationState<IntervalElement> newState) {
-		IntervalElement assumeVal = newState.abstractEval(e);
+	private static GenericValuationState<CongruenceClassInterval> assumeTrue(RTLExpression e, GenericValuationState<CongruenceClassInterval> newState) {
+		CongruenceClassInterval assumeVal = newState.abstractEval(e);
 		logger.debug("Assuming " + e + " to hold");
 		assert !assumeVal.isBot() : "Bottoming state reached with " + e + " and " + newState;
 		if (assumeVal.hasUniqueConcretization()) {
@@ -263,8 +263,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		if (e instanceof RTLOperation) {
 			RTLOperation op = (RTLOperation) e;
 			RTLExpression[] args = op.getOperands();
-			IntervalElement op0, op1;
-			Pair<IntervalElement, IntervalElement> tmp;
+			CongruenceClassInterval op0, op1;
+			Pair<CongruenceClassInterval, CongruenceClassInterval> tmp;
 			RTLExpression leq, eq;
 			switch (op.getOperator()) {
 				case UNKNOWN:
@@ -298,7 +298,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 					assert args.length == 2;
 					op0 = newState.abstractEval(args[0]);
 					op1 = newState.abstractEval(args[1]);
-					tmp = IntervalElement.assumeSLeq(op0, op1);
+					tmp = assumeSLeq(op0, op1);
 					newState = assumeEq(args[0], tmp.getLeft(), newState);
 					newState = assumeEq(args[1], tmp.getRight(), newState);
 					return newState;
@@ -311,7 +311,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 					assert args.length == 2;
 					op0 = newState.abstractEval(args[0]);
 					op1 = newState.abstractEval(args[1]);
-					tmp = IntervalElement.assumeULeq(op0, op1);
+					tmp = assumeULeq(op0, op1);
 					newState = assumeEq(args[0], tmp.getLeft(), newState);
 					newState = assumeEq(args[1], tmp.getRight(), newState);
 					return newState;
@@ -335,7 +335,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			return assumeTrue(ExpressionFactory.createOr(ExpressionFactory.createAnd(cond, t),ExpressionFactory.createAnd(negCond, f)), newState);
 		} else if (e instanceof RTLMemoryLocation) {
 			RTLMemoryLocation m = (RTLMemoryLocation) e;
-			newState.setMemoryValue(m, TRUE_INTERVAL);
+			newState.setMemoryValue(m, TRUE_CC_INTERVAL);
 			return newState;
 		} else if (e instanceof RTLNondet) {
 			// this does not really help, but well...
@@ -347,14 +347,14 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			return newState;
 		} else if (e instanceof RTLVariable) {
 			RTLVariable v = (RTLVariable) e;
-			newState.setVariableValue(v, TRUE_INTERVAL, newState.getVariableValue(v).getRight());
+			newState.setVariableValue(v, TRUE_CC_INTERVAL, newState.getVariableValue(v).getRight());
 			return newState;
 		} else {
 			throw new AssertionError("Unknown assumption " + e);
 		}
 	}
 
-	public static Set<AbstractState> abstractPost(final RTLStatement statement, final GenericValuationState<IntervalElement> s) {
+	public static Set<AbstractState> abstractPost(final RTLStatement statement, final GenericValuationState<CongruenceClassInterval> s) {
 		logger.info("start processing abstractPost(" + statement + ") " + statement.getLabel());
 
 		Set<AbstractState> res = statement.accept(new DefaultStatementVisitor<Set<AbstractState>>() {
@@ -362,9 +362,9 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLVariableAssignment stmt) {
 				logger.verbose("Found RTLVariableAssignment: " + stmt);
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				RTLVariable v = stmt.getLeftHandSide();
-				IntervalElement rhs = s.abstractEval(stmt.getRightHandSide());
+				CongruenceClassInterval rhs = s.abstractEval(stmt.getRightHandSide());
 				MemoryRegion region = newState.getRegion(stmt.getRightHandSide());
 				newState.setVariableValue(v, rhs, region);
 				logger.verbose("Set " + v + " = " + rhs + " and new region " + region);
@@ -374,8 +374,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLMemoryAssignment stmt) {
 				logger.verbose("Found RTLMemoryAssignment: " + stmt);
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
-				IntervalElement rhs = s.abstractEval(stmt.getRightHandSide());
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
+				CongruenceClassInterval rhs = s.abstractEval(stmt.getRightHandSide());
 				newState.setMemoryValue(stmt.getLeftHandSide(), rhs);
 				logger.verbose("Set [" + stmt.getLeftHandSide() + "] = " + rhs);
 				return Collections.singleton((AbstractState) newState);
@@ -385,14 +385,14 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			public Set<AbstractState> visit(RTLAssume stmt) {
 				logger.verbose("Found RTLAssume: " + stmt);
 				RTLExpression e = stmt.getAssumption();
-				GenericValuationState<IntervalElement> newState = assumeTrue(e, new GenericValuationState<>(s));
+				GenericValuationState<CongruenceClassInterval> newState = assumeTrue(e, new GenericValuationState<>(s));
 				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLAlloc stmt) {
 				logger.verbose("Found RTLAlloc: " + stmt);
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				Writable lhs = stmt.getPointer();
 				MemoryRegion newRegion;
 
@@ -408,11 +408,11 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				// FS gets a value of (FS, 0) in the prologue.
 
 				if (lhs instanceof RTLVariable) {
-					newState.setVariableValue((RTLVariable)lhs, IntervalElement.number(0L, lhs.getBitWidth()), newRegion);
+					newState.setVariableValue((RTLVariable)lhs, number(BitNumber.valueOf(0L, lhs.getBitWidth())), newRegion);
 				} else {
 					RTLMemoryLocation m = (RTLMemoryLocation)lhs;
-					IntervalElement abstractAddress = newState.abstractEval(m);
-					newState.setMemoryValue(abstractAddress, IntervalElement.number(0L, lhs.getBitWidth()), newRegion);
+					CongruenceClassInterval abstractAddress = newState.abstractEval(m);
+					newState.setMemoryValue(abstractAddress, number(BitNumber.valueOf(0L, lhs.getBitWidth())), newRegion);
 				}
 
 				return Collections.singleton((AbstractState)newState);
@@ -421,8 +421,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLDealloc stmt) {
 				logger.verbose("Found RTLDealloc: " + stmt);
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
-				IntervalElement abstractAddress = newState.abstractEval(stmt.getPointer());
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
+				CongruenceClassInterval abstractAddress = newState.abstractEval(stmt.getPointer());
 
 				// if the address cannot be determined, set all store memory to TOP
 				if (abstractAddress.isTop()) {
@@ -443,25 +443,25 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			public Set<AbstractState> visit(RTLUnknownProcedureCall stmt) {
 				logger.verbose("Found RTLUnknownProcedureCall: " + stmt);
 				assert !Options.failFast.getValue() : "Unknown procedure call: " + stmt;
-				return Collections.singleton((AbstractState) new GenericValuationState<>(IntervalElementFactory.getFactory()));
+				return Collections.singleton((AbstractState) new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory()));
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLHavoc stmt) {
 				logger.verbose("Found RTLHavoc: " + stmt);
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				RTLVariable var = stmt.getVariable();
-				newState.setVariableValue(var, IntervalElement.top(var.getBitWidth()), newState.getVariableValue(var).getRight());
+				newState.setVariableValue(var, top(var.getBitWidth()), newState.getVariableValue(var).getRight());
 				return Collections.singleton((AbstractState) assumeTrue(ExpressionFactory.createUnsignedLessOrEqual(var, stmt.getMaximum()), newState));
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLMemset stmt) {
 				logger.verbose("Found RTLMemset: " + stmt);
-				IntervalElement value = s.abstractEval(stmt.getValue());
-				IntervalElement count = s.abstractEval(stmt.getCount());
+				CongruenceClassInterval value = s.abstractEval(stmt.getValue());
+				CongruenceClassInterval count = s.abstractEval(stmt.getCount());
 				logger.verbose("MemSet(dst: " + stmt.getDestination()+ ", val: " + value + ", count: " + count + ')');
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				if (count.hasUniqueConcretization()) {
 					for (long i = 0L; i < count.getUniqueConcretization().zExtLongValue(); i++) {
 						RTLExpression off = ExpressionFactory.createNumber(i, count.getBitWidth());
@@ -470,7 +470,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 					}
 				} else {
 					assert !Options.failFast.getValue() : "Memset with unknown count parameter: " + count;
-					newState = new GenericValuationState<>(IntervalElementFactory.getFactory());
+					newState = new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory());
 				}
 				return Collections.singleton((AbstractState) newState);
 			}
@@ -478,20 +478,20 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public Set<AbstractState> visit(RTLMemcpy stmt) {
 				logger.verbose("Found RTLMemcpy: " + stmt);
-				IntervalElement size = s.abstractEval(stmt.getSize());
+				CongruenceClassInterval size = s.abstractEval(stmt.getSize());
 				logger.verbose("RTLMemcpy(src: " + stmt.getSource() + ", dst: " + stmt.getDestination() + ", size: " + size + ')');
-				GenericValuationState<IntervalElement> newState = new GenericValuationState<>(s);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				if (size.hasUniqueConcretization()) {
 					for (long i = 0L; i < size.getUniqueConcretization().zExtLongValue(); i++) {
 						RTLExpression off = ExpressionFactory.createNumber(i, size.getBitWidth());
 						RTLMemoryLocation srcPos = ExpressionFactory.createMemoryLocation(ExpressionFactory.createPlus(stmt.getSource(), off), 8);
 						RTLMemoryLocation dstPos = ExpressionFactory.createMemoryLocation(ExpressionFactory.createPlus(stmt.getDestination(), off), 8);
-						IntervalElement value = newState.getMemoryValue(srcPos);
+						CongruenceClassInterval value = newState.getMemoryValue(srcPos);
 						newState.setMemoryValue(dstPos, value);
 					}
 				} else {
 					assert !Options.failFast.getValue() : "Memcpy with unknown size parameter: " + size;
-					newState = new GenericValuationState<>(IntervalElementFactory.getFactory());
+					newState = new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory());
 				}
 				return Collections.singleton((AbstractState) newState);
 			}
@@ -500,7 +500,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			public Set<AbstractState> visitDefault(RTLStatement stmt) {
 				logger.verbose("Found RTLStatement: " + stmt);
 				assert !Options.failFast.getValue() : "Unknown statement: " + stmt;
-				return Collections.singleton((AbstractState) new GenericValuationState<>(IntervalElementFactory.getFactory()));
+				return Collections.singleton((AbstractState) new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory()));
 			}
 		});
 
@@ -516,7 +516,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		boolean couldStrengthen = false;
 		for (AbstractState other : otherStates) {
 			logger.debug("  With state (" + other.getClass() + ") " + other);
-			couldStrengthen |= other instanceof GenericValuationState && ((GenericValuationState<IntervalElement>)other).id != ((GenericValuationState<IntervalElement>)s).id;
+			couldStrengthen |= other instanceof GenericValuationState && ((GenericValuationState<CongruenceClassInterval>)other).id != ((GenericValuationState<CongruenceClassInterval>)s).id;
 		}
 		assert !couldStrengthen : "Could actually strengthen here";
         return s; //TODO actually implement something
@@ -528,10 +528,10 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		logger.debug("Incrementing precision in " + s + " from " + precision);
 		logger.debug("prec((" + s + "), (" + precision + "), (" + reached + ")) called");
 		IntervalPrecision p = (IntervalPrecision) precision;
-		GenericValuationState<IntervalElement> newState = (GenericValuationState<IntervalElement>) s;
+		GenericValuationState<CongruenceClassInterval> newState = (GenericValuationState<CongruenceClassInterval>) s;
 		boolean changed = false;
 		for (AbstractState state : reached) {
-			GenericValuationState<IntervalElement> rState = (GenericValuationState<IntervalElement>) state;
+			GenericValuationState<CongruenceClassInterval> rState = (GenericValuationState<CongruenceClassInterval>) state;
 			changed = changed || rState.lessOrEqual(newState);
 		}
 		if (!changed) {
@@ -540,9 +540,9 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		}
 		else if(p.getCount() >= threshold.getValue()){
 			logger.debug("Will Widen Now");
-			GenericValuationState<IntervalElement> result = new GenericValuationState<>(newState);
+			GenericValuationState<CongruenceClassInterval> result = new GenericValuationState<>(newState);
 			for (AbstractState state : reached) {
-				result = result.widen((GenericValuationState<IntervalElement>) state);
+				result = result.widen((GenericValuationState<CongruenceClassInterval>) state);
 			}
 			logger.debug("Widen result: " + result);
 			return Pair.create((AbstractState) result, (Precision) new IntervalPrecision());

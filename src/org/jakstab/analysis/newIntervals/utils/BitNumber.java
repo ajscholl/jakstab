@@ -290,6 +290,35 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	}
 
 	/**
+	 * LCM two numbers.
+	 *
+	 * @param b The other number.
+	 * @return LCM.
+	 */
+	public BitNumber lcm(BitNumber b) {
+		assertCompatible(b);
+		BigInteger tmp = lcm(unsignedBigValue(), b.unsignedBigValue());
+		BitNumber result = valueOf(tmp.longValue());
+		assert result.unsignedBigValue().equals(tmp) : "Overflow in lcm: " + this + " `lcm` " + b + " = " + tmp + ", but this was truncated to " + result;
+		return result;
+	}
+
+	/**
+	 * LCM of two BigIntegers.
+	 *
+	 * @param a First number.
+	 * @param b Second number.
+	 * @return LCM.
+	 */
+	private static BigInteger lcm(BigInteger a, BigInteger b) {
+		if (a.equals(BigInteger.ZERO) || b.equals(BigInteger.ZERO)) {
+			return BigInteger.ZERO;
+		} else {
+			return a.divide(a.gcd(b)).multiply(b).abs();
+		}
+	}
+
+	/**
 	 * Compute a|b, i.e. whether c exists such that b = ac.
 	 *
 	 * @param b b

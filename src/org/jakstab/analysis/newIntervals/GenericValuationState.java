@@ -9,6 +9,7 @@ import org.jakstab.rtl.expressions.RTLExpression;
 import org.jakstab.rtl.expressions.RTLMemoryLocation;
 import org.jakstab.rtl.expressions.RTLNumber;
 import org.jakstab.rtl.expressions.RTLVariable;
+import org.jakstab.util.IterableIterator;
 import org.jakstab.util.Logger;
 import org.jakstab.util.MapMap.EntryIterator;
 import org.jakstab.util.Pair;
@@ -92,8 +93,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		int bitWidth = value.getBitWidth();
 		if (address.hasUniqueConcretization()) {
 			setMemoryValue(region, address.getUniqueConcretization().zExtLongValue(), bitWidth, value);
-		}
-		if (address.isTop()) {
+		} else if (address.isTop()) {
 			if (!store.isTop()) {
 				assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ") when writing " + address + " with value " + value + " with memory " + store;
 				for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
@@ -101,15 +101,18 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 					store.set(entryIt.getLeftKey(), entryIt.getRightKey(), value.getBitWidth(), entryIt.getValue().join(value).abstractGet());
 				}
 			}
-			return;
-		}
-		for (BitNumber offset : address) {
-			AbstractValue oldVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
-			setMemoryValue(region, offset.zExtLongValue(), bitWidth, value.join(oldVal).abstractGet());
+		} else {
+			logger.verbose("Setting multiple memory locations. Setting " + address + " to " + value + " in region " + region);
+			for (BitNumber offset : address) {
+				AbstractValue oldVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
+				store.weakUpdate(region, offset.zExtLongValue(), bitWidth, value);
+				AbstractValue newVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
+				logger.verbose("Read " + offset + " with " + oldVal + ", Written " + newVal);
+			}
 		}
 	}
 
-	void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
+	private void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
 		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
 		store.set(region, offset, bitWidth, value);
 	}
@@ -142,7 +145,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return factory.delegateJoins(bitWidth, results);
 	}
 
-	T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
+	private T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
 		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
 		return store.get(region, offset, bitWidth);
 	}
@@ -151,12 +154,34 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return new Pair<>(varVal.get(var).abstractBox(), varRegions.get(var));
 	}
 
-	Iterator<Entry<RTLVariable, T>> variableIterator() {
+	private Iterator<Entry<RTLVariable, T>> variableIterator() {
 		return varVal.iterator();
 	}
 
-	EntryIterator<MemoryRegion, Long, T> storeIterator() {
+	private EntryIterator<MemoryRegion, Long, T> storeIterator() {
 		return store.entryIterator();
+	}
+
+	GenericValuationState<T> widen(GenericValuationState<T> other) {
+		GenericValuationState<T> widenedState = new GenericValuationState<>(factory);
+		// Widen variable valuations
+		for (Entry<RTLVariable,T> entry : new IterableIterator<>(variableIterator())) {
+			RTLVariable var = entry.getKey();
+			T v = entry.getValue();
+			Pair<AbstractDomain<T>, MemoryRegion> vv = other.getVariableValue(var);
+			widenedState.setVariableValue(var, v.widen(vv.getLeft().abstractGet()).abstractGet(), vv.getRight());
+		}
+		// Widen memory
+		for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+			MemoryRegion region = entryIt.getLeftKey();
+			Long offset = entryIt.getRightKey();
+			T v = entryIt.getValue();
+			int bitWidth = v.getBitWidth();
+			widenedState.setMemoryValue(region, offset, bitWidth, v.widen(other.getMemoryValue(region, offset, bitWidth)).abstractGet());
+		}
+		logger.debug("Widened " + this + " and " + other + " to " + widenedState);
+		assert join(other).lessOrEqual(widenedState) : this + " `join` " + other + " = " + join(other) + " !<= " + widenedState;
+		return widenedState;
 	}
 
 	@Override
@@ -173,13 +198,16 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 	@SuppressWarnings("unchecked")
 	public GenericValuationState<T> join(LatticeElement l) {
 		GenericValuationState<T> other = (GenericValuationState<T>) l;
+		final GenericValuationState<T> result;
 		if (isTop() || other.isBot()) {
-			return this;
+			result = this;
+		} else if (isBot() || other.isTop()) {
+			result = other;
+		} else {
+			result = new GenericValuationState<>(varVal.join(other.varVal), store.join(other.store), factory, varRegions.join(other.varRegions), allocationCounter.join(other.allocationCounter));
 		}
-		if (isBot() || other.isTop()) {
-			return other;
-		}
-		return new GenericValuationState<>(varVal.join(other.varVal), store.join(other.store), factory, varRegions.join(other.varRegions), allocationCounter.join(other.allocationCounter));
+		logger.verbose("Joining " + this + " and " + l + " to " + result);
+		return result;
 	}
 
 	@Override
@@ -221,7 +249,25 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 
 	@Override
 	public String toString() {
-		return "[" + id + "] I: " + varVal + " Mem:" + store + " Regions: " + varRegions;
+		StringBuilder result = new StringBuilder();
+		result.append('[').append(id).append("]:\n");
+		result.append("Variables:\n");
+		for (Entry<RTLVariable, T> v : new IterableIterator<>(variableIterator())) {
+			result.append('\t').append(v.getKey()).append(": ").append(v.getValue()).append('\n');
+		}
+		result.append("\nMemory:\n");
+		for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
+			MemoryRegion region = entryIt.getLeftKey();
+			Long offset = entryIt.getRightKey();
+			T v = entryIt.getValue();
+			int bitWidth = v.getBitWidth();
+			result.append("\t0x").append(Long.toHexString(offset)).append(" (").append(region).append(") @ ").append(bitWidth).append(": ").append(v).append('\n');
+		}
+		result.append("\nRegions:\n");
+		for (Entry<RTLVariable, MemoryRegion> v : varRegions) {
+			result.append('\t').append(v.getKey()).append(": ").append(v.getValue()).append('\n');
+		}
+		return result.toString();
 	}
 
 	@Override

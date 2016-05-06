@@ -19,6 +19,7 @@ import java.util.*;
 
 import static org.jakstab.analysis.newIntervals.CongruenceClassInterval.RevMode.*;
 import static org.jakstab.analysis.newIntervals.IntervalElement.interval;
+import static org.jakstab.analysis.newIntervals.utils.BitNumber.bit;
 import static org.jakstab.rtl.expressions.RTLBitRange.bitMask;
 
 final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInterval>, Boxable<CongruenceClassInterval> {
@@ -31,7 +32,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	/**
 	 * Range valid numbers are in.
 	 */
-	private final IntervalElement range;
+	final IntervalElement range;
 
 	/**
 	 * Range the remainder has to be in.
@@ -227,11 +228,15 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		return number(BitNumber.valueOf(n, bitSize));
 	}
 
+	private static CongruenceClassInterval number(long n, int bitSize) {
+		return number(BitNumber.valueOf(n, bitSize));
+	}
+
 	public static CongruenceClassInterval number(BitNumber n) {
 		return getFromCache(new CongruenceClassInterval(IntervalElement.number(n)));
 	}
 
-	private static CongruenceClassInterval zeroInterval(IntervalElement range) {
+	static CongruenceClassInterval zeroInterval(IntervalElement range) {
 		return getFromCache(new CongruenceClassInterval(range));
 	}
 
@@ -307,6 +312,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	}
 
 	private static CongruenceClassInterval maybeDropCC(IntervalElement s1, IntervalElement s2, CongruenceClassInterval x) {
+		s1.assertCompatible(s2);
+		assert x.getBitWidth() == s1.getBitWidth();
 		if (x.isTop()) {
 			return zeroInterval(s1.join(s2));
 		} else if (x.isBot()) {
@@ -333,6 +340,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	@Override
 	public CongruenceClassInterval join(LatticeElement l) {
 		CongruenceClassInterval t = (CongruenceClassInterval) l;
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (isTop() || t.isBot() || t.lessOrEqual(this)) {
 			result = this;
@@ -402,6 +410,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	@Override
 	public boolean lessOrEqual(LatticeElement l) {
 		CongruenceClassInterval t = (CongruenceClassInterval) l;
+		assertCompatible(t);
 		final boolean result;
 		if (isTop()) {
 			result = t.isTop();
@@ -479,6 +488,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		return kind == CCIntervalKind.BOT;
 	}
 
+	private boolean hasElement(long e) {
+		long fitted = BitNumber.valueOf(e, bitSize).sExtLongValue();
+		assert e == fitted : "bad call to hasElement with " + e + " (" + fitted + ", " + bitSize + ')';
+		return hasElement(BitNumber.valueOf(e, bitSize));
+	}
+
 	@Override
 	public boolean hasElement(RTLNumber e) {
 		return hasElement(BitNumber.valueOf(e));
@@ -503,6 +518,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 * @return True if s + t never overflows.
 	 */
 	private static boolean additionNoOverflow(IntervalElement s, IntervalElement t) {
+		s.assertCompatible(t);
 		if (s.isBot() || t.isBot()) {
 			return true;
 		} else {
@@ -520,6 +536,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 * @return The result.
 	 */
 	private static IntervalElement mkAddCongruence(IntervalElement t, BitNumber m) {
+		assert t.getBitWidth() == m.getBitWidth();
 		IntervalElement x = t.num_rem_cc(m);
 		List<IntervalElement> c = new ArrayList<>();
 		c.add(x);
@@ -531,6 +548,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> add(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD) {
 			if (t.kind == CCIntervalKind.MOD) {
@@ -562,6 +580,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> sub(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = add(t.negate().abstractGet()).abstractGet();
 		logger.debug(this + " - " + t + " = " + result);
 		return result;
@@ -569,6 +588,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> negate() {
+		assertValid();
 		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD) {
 			List<IntervalElement> xs = modRange.negate().num_rem_w(modulus);
@@ -609,11 +629,21 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> mul(CongruenceClassInterval t) {
+		assertCompatible(t);
 		// TODO if both intervals are below 64 bits, we can actually do more here as overflow can not happen
+		// but keep in mind that at least shl also calls mulHelper.
 		return extentBitSize().mulHelper(t.extentBitSize());
 	}
 
+	/**
+	 * Perform actual multiplication without extending bitsizes (jakstab requires this, but left-shifts multiply, too! And
+	 * they do not need this extension.
+	 *
+	 * @param t Second operand.
+	 * @return this * t.
+	 */
 	private CongruenceClassInterval mulHelper(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (hasUniqueConcretization()) {
 			if (t.hasUniqueConcretization()) {
@@ -687,6 +717,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> unsignedDiv(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().unsignedDiv(t.getRange()));
 		logger.debug(this + " /u " + t + " = " + result);
 		return result;
@@ -694,6 +725,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> signedDiv(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().signedDiv(t.getRange()));
 		logger.debug(this + " /s " + t + " = " + result);
 		return result;
@@ -701,6 +733,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> unsignedRem(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (t.hasUniqueConcretization()) {
 			BitNumber u = t.getUniqueConcretization();
@@ -725,6 +758,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> signedRem(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().signedRem(t.getRange()));
 		logger.debug(this + " %s " + t + " = " + result);
 		return result;
@@ -744,6 +778,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		assert curSize.log2n().hasValue();
 		assert newSize.log2n().hasValue();
 		assert curSize.uleq(newSize);
+		assert s.getBitWidth() == curSize.getBitWidth();
+		assert curSize.getBitWidth() == newSize.getBitWidth();
 		BitNumber m = newSize.dec();
 		final IntervalElement result;
 		if (curSize.equals(newSize)) {
@@ -815,6 +851,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> or(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD) {
 			if (t.kind == CCIntervalKind.MOD) {
@@ -870,6 +907,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> and(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (hasUniqueConcretization()) {
 			BitNumber n = getUniqueConcretization();
@@ -945,6 +983,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> xor(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD && t.kind == CCIntervalKind.MOD) {
 			result = xor_w2(range, modRange, modulus, t.range, t.modRange, t.modulus);
@@ -957,6 +996,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> not() {
+		assertValid();
 		return add(number(BitNumber.valueOf(1L, bitSize))).negate();
 	}
 
@@ -973,6 +1013,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	public AbstractDomain<CongruenceClassInterval> signExtend(int firstBit, int lastBit) {
 		assert firstBit > 0 && firstBit <= 64 && firstBit <= lastBit : "Invalid first bit " + firstBit;
 		assert lastBit > 0 && lastBit <= 64 : "Invalid last bit " + lastBit;
+		logger.debug("sign-extending " + this + " from " + firstBit + " to " + lastBit);
 		int targetWidth = Math.max(bitSize, lastBit + 1);
 		CongruenceClassInterval result = signExtend(targetWidth).abstractGet();
 		if (firstBit - 1 == bitSize) {
@@ -986,9 +1027,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> signExtend(int bitSize) {
-		assert bitSize > this.bitSize;
+		assert bitSize >= this.bitSize : "Can not sign-extend " + this + " to " + bitSize;
+		logger.debug("sign-extending " + this + " to " + bitSize);
 		final CongruenceClassInterval result;
-		if (kind == CCIntervalKind.MOD) {
+		if (bitSize == this.bitSize) {
+			result = this;
+		} else if (kind == CCIntervalKind.MOD) {
 			List<CongruenceClassInterval> xs = new ArrayList<>();
 			for (IntervalElement x : range.cut()) {
 				assert x.isInterval();
@@ -1014,23 +1058,26 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	public AbstractDomain<CongruenceClassInterval> zeroExtend(int firstBit, int lastBit) {
 		assert firstBit > 0 && firstBit <= 64 && firstBit <= lastBit : "Invalid first bit " + firstBit;
 		assert lastBit > 0 && lastBit <= 64 : "Invalid last bit " + lastBit;
+		logger.debug("zero-extending " + this + " from " + firstBit + " to " + lastBit);
 		int targetWidth = Math.max(bitSize, lastBit + 1);
 		CongruenceClassInterval result = zeroExtend(targetWidth).abstractGet();
 		if (firstBit - 1 == bitSize) {
 			return result;
 		} else {
-			// this looks kinda fishy... so lets fail for the moment, remove the assert if this is a valid case...
-			assert false : "Strange zero extension: " + firstBit + " to " + lastBit + " for " + this;
 			// keep only the bits from 0..firstBit-1 and lastBit+1 .. targetWidth-1, as the other bits
 			// should get set to 0 from the extension.
-			return result.and(number(bitMask(0, firstBit - 1) | bitMask(lastBit + 1, targetWidth - 1)));
+			return result.and(number(bitMask(0, firstBit - 1) | bitMask(lastBit + 1, targetWidth - 1), targetWidth));
 		}
 	}
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> zeroExtend(int bitSize) {
+		assert bitSize >= this.bitSize : "Can not zero-extend " + this + " to " + bitSize;
+		logger.debug("zero-extending " + this + " to " + bitSize);
 		final CongruenceClassInterval result;
-		if (kind == CCIntervalKind.MOD) {
+		if (bitSize == this.bitSize) {
+			result = this;
+		} else if (kind == CCIntervalKind.MOD) {
 			result = modInterval(range.zeroExtend(bitSize), modRange.cast(bitSize), modulus.zExtend(bitSize));
 		} else {
 			result = modInterval(getRange().zeroExtend(bitSize), getRange().cast(bitSize), BitNumber.valueOf(getRange().maxIntervalSize().longValue(), bitSize));
@@ -1041,9 +1088,11 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> truncate(int bitSize) {
-		assert bitSize < this.bitSize;
+		assert bitSize <= this.bitSize : "Can not truncate " + this + " to " + bitSize;
 		final CongruenceClassInterval result;
-		if (kind == CCIntervalKind.MOD) {
+		if (bitSize == this.bitSize) {
+			result = this;
+		} else if (kind == CCIntervalKind.MOD) {
 			IntervalElement s = range.truncate(bitSize);
 			if (modulus.log2n().hasValue()) {
 				BitNumber h = BitNumber.uMaxVal(bitSize).zExtend(this.bitSize).inc();
@@ -1137,11 +1186,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> shl(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (t.hasUniqueConcretization()) {
 			BitNumber n = t.getUniqueConcretization();
 			if (n.ult(BitNumber.valueOf((long)bitSize, bitSize))) {
-				result = mul(number(BitNumber.valueOf(BitNumber.bit((int)n.zExtLongValue()), bitSize))).abstractGet();
+				result = mulHelper(number(BitNumber.valueOf(bit((int)n.zExtLongValue()), bitSize))).abstractGet();
 			} else {
 				result = number(BitNumber.valueOf(0L, bitSize));
 			}
@@ -1162,6 +1212,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> shr(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (t.hasUniqueConcretization()) {
 			BitNumber n = t.getUniqueConcretization();
@@ -1209,8 +1260,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> sar(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
-
 		if (t.hasUniqueConcretization()) {
 			BitNumber n = t.getUniqueConcretization();
 			if (n.ult(BitNumber.valueOf((long)bitSize, bitSize))) {
@@ -1236,6 +1287,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> eq(CongruenceClassInterval t) {
+		assertCompatible(t);
 		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD && t.kind == CCIntervalKind.MOD) {
 			if (range.intersection(t.range).length == 0) {
@@ -1278,6 +1330,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> signedLessThan(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().signedLessThan(t.getRange()));
 		logger.debug(this + " <_s " + t + " = " + result);
 		return result;
@@ -1285,6 +1338,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> signedLessThanOrEqual(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().signedLessThanOrEqual(t.getRange()));
 		logger.debug(this + " <=_s " + t + " = " + result);
 		return result;
@@ -1292,6 +1346,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> unsignedLessThan(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().unsignedLessThan(t.getRange()));
 		logger.debug(this + " <_u " + t + " = " + result);
 		return result;
@@ -1299,6 +1354,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> unsignedLessThanOrEqual(CongruenceClassInterval t) {
+		assertCompatible(t);
 		CongruenceClassInterval result = zeroInterval(getRange().unsignedLessThanOrEqual(t.getRange()));
 		logger.debug(this + " <=_u " + t + " = " + result);
 		return result;
@@ -1306,9 +1362,13 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 
 	@Override
 	public AbstractDomain<CongruenceClassInterval> widen(CongruenceClassInterval t) {
-		// TODO widen
+		assertCompatible(t);
 		if (kind == CCIntervalKind.MOD && t.kind == CCIntervalKind.MOD) {
 			return modInterval(range.widen(t.range), modRange.widen(t.modRange), modulus.gcd(t.modulus));
+		} else if (kind == CCIntervalKind.MOD) {
+			return modInterval(range.widen(t.range), modRange, modulus);
+		} else if (t.kind == CCIntervalKind.MOD) {
+			return modInterval(range.widen(t.range), t.modRange, t.modulus);
 		} else {
 			return zeroInterval(getRange().widen(t.getRange()));
 		}
@@ -1376,7 +1436,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 * @param max Maximum allowed bit-pattern.
 	 * @return The result.
 	 */
-	public static CongruenceClassInterval ccInterval(BitNumber min, BitNumber max) {
+	static CongruenceClassInterval ccInterval(BitNumber min, BitNumber max) {
 		return getFromCache(zeroInterval(interval(min, max)));
 	}
 
@@ -1467,6 +1527,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	}
 
 	private static IntervalElement constrainModRangeWithRange(IntervalElement range, IntervalElement modRange, BitNumber modulus) {
+		range.assertCompatible(modRange);
+		assert modulus.getBitWidth() == range.getBitWidth();
 		List<IntervalElement> xs = new ArrayList<>();
 		for (IntervalElement r : range.num_rem_w(modulus)) {
 			Collections.addAll(xs, r.intersection(modRange));
@@ -1602,6 +1664,11 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		final CCIntervalKind kind;
 
 		ConstructorResult(IntervalElement range, IntervalElement modRange, BitNumber modulus) {
+			assert range != null;
+			assert range.isInterval();
+			assert modRange != null;
+			assert modRange.isInterval();
+			assert modulus != null;
 			this.range = range;
 			this.modRange = modRange;
 			this.modulus = modulus;
@@ -1609,11 +1676,18 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		}
 
 		ConstructorResult(IntervalElement range) {
-			assert range != null && range.isInterval();
-			this.range = range;
+			assert range != null;
+			this.range = range.isInterval() ? range : null;
 			modRange = null;
 			modulus = null;
-			kind = CCIntervalKind.ZERO;
+			if (range.isInterval()) {
+				kind = CCIntervalKind.ZERO;
+			} else if (range.isBot()) {
+				kind = CCIntervalKind.BOT;
+			} else {
+				assert range.isTop();
+				kind = CCIntervalKind.TOP;
+			}
 		}
 
 		ConstructorResult(CCIntervalKind kind) {
@@ -1719,7 +1793,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	private CongruenceClassInterval(IntervalElement range, IntervalElement modRange, BitNumber modulus) {
 		assert range.getBitWidth() == modRange.getBitWidth();
 		assert range.getBitWidth() == modulus.getBitWidth();
-		assert modulus.zExtLongValue() != 0L;
+		assert modulus.zExtLongValue() != 0L : "Modulus may not be zero";
 
 		ConstructorResult r = mkCCInterval(range, modRange, modulus);
 		this.range = r.range;
@@ -1768,6 +1842,127 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 */
 	public CongruenceClassInterval bot() {
 		return bot(bitSize);
+	}
+
+	CongruenceClassInterval meet(CongruenceClassInterval t) {
+		assertCompatible(t);
+		final CongruenceClassInterval result;
+		if (isBot() || t.isTop()) {
+			result = this;
+		} else if (t.isBot() || isTop()) {
+			result = t;
+		} else if (kind == CCIntervalKind.ZERO) {
+			if (t.kind == CCIntervalKind.ZERO) {
+				// constrain range
+				result = zeroInterval(range.meet(t.range));
+			} else {
+				assert t.kind == CCIntervalKind.MOD;
+				// keep one congruence information, constrain range
+				result = modInterval(range.meet(t.range), t.modRange, t.modulus);
+			}
+		} else {
+			assert kind == CCIntervalKind.MOD;
+			if (t.kind == CCIntervalKind.ZERO) {
+				// keep one congruence information, constrain range
+				result = modInterval(range.meet(t.range), modRange, modulus);
+			} else {
+				assert t.kind == CCIntervalKind.MOD;
+				BitNumber z = BitNumber.valueOf(0L, bitSize);
+				// narrow mod ranges to relevant section
+				IntervalElement[] m1 = modRange.intersection(interval(z, modulus));
+				IntervalElement[] m2 = t.modRange.intersection(interval(z, t.modulus));
+				// compute intersection of intervals, the remainder has to be in both
+				List<IntervalElement> m = new ArrayList<>();
+				for (IntervalElement x : m1) {
+					for (IntervalElement y : m2) {
+						m.addAll(Arrays.asList(x.intersection(y)));
+					}
+				}
+				// new modulus is lcm of both
+				// TODO: overflow here would be bad...
+				BitNumber newMod = modulus.lcm(t.modulus);
+				result = modInterval(range.meet(t.range), IntervalElement.joinsMod(newMod, m), newMod);
+			}
+		}
+		logger.debug(this + " `meet` " + t + " = " + result);
+		assert result.lessOrEqual(this);
+		assert result.lessOrEqual(t);
+		return result;
+	}
+
+	static Pair<CongruenceClassInterval, CongruenceClassInterval> assumeULeq(CongruenceClassInterval s, CongruenceClassInterval t) {
+		s.assertCompatible(t);
+		int bitSize = s.bitSize;
+		final CongruenceClassInterval newS;
+		if (t.isBot()) {
+			newS = bot(bitSize);
+		} else if (t.hasElement(bit(bitSize) - 1L)) {
+			newS = s;
+		} else {
+			assert t.kind == CCIntervalKind.ZERO || t.kind == CCIntervalKind.MOD;
+			newS = s.meet(zeroInterval(interval(BitNumber.valueOf(0L, bitSize), t.range.maxBits)));
+		}
+		final CongruenceClassInterval newT;
+		if (s.isBot()) {
+			newT = bot(bitSize);
+		} else if (s.hasElement(0L)) {
+			newT = t;
+		} else {
+			assert s.kind == CCIntervalKind.ZERO || s.kind == CCIntervalKind.MOD;
+			newT = t.meet(zeroInterval(interval(s.range.minBits, BitNumber.valueOf(bit(bitSize) - 1L, bitSize))));
+		}
+		Pair<CongruenceClassInterval, CongruenceClassInterval> result = new Pair<>(newS, newT);
+		logger.debug("assume " + s + " <= " + t + ": " + result);
+		return result;
+	}
+
+	void assertCompatible(CongruenceClassInterval t) {
+		assert bitSize == t.bitSize : "Incompatible: " + this + " and " + t;
+		assertValid();
+		t.assertValid();
+	}
+
+	private void assertValid() {
+		if (kind == CCIntervalKind.BOT || kind == CCIntervalKind.TOP) {
+			assert range == null;
+			assert modRange == null;
+			assert modulus == null;
+		} else if (kind == CCIntervalKind.ZERO) {
+			assert range != null;
+			assert modRange == null;
+			assert modulus == null;
+		} else {
+			assert kind == CCIntervalKind.MOD;
+			assert range != null;
+			assert modRange != null;
+			assert modulus != null;
+		}
+	}
+
+	static Pair<CongruenceClassInterval, CongruenceClassInterval> assumeSLeq(CongruenceClassInterval s, CongruenceClassInterval t) {
+		s.assertCompatible(t);
+		int bitSize = s.bitSize;
+		final CongruenceClassInterval newS;
+		if (t.isBot()) {
+			newS = bot(bitSize);
+		} else if (t.hasElement(bit(bitSize - 1) - 1L)) {
+			newS = s;
+		} else {
+			assert t.kind == CCIntervalKind.ZERO || t.kind == CCIntervalKind.MOD;
+			newS = s.meet(zeroInterval(interval(BitNumber.valueOf(bit(bitSize) - 1L, bitSize), t.range.maxBits)));
+		}
+		final CongruenceClassInterval newT;
+		if (s.isBot()) {
+			newT = bot(bitSize);
+		} else if (s.hasElement(bit(bitSize) - 1L)) {
+			newT = t;
+		} else {
+			assert s.kind == CCIntervalKind.ZERO || s.kind == CCIntervalKind.MOD;
+			newT = t.meet(zeroInterval(interval(s.range.minBits, BitNumber.valueOf(bit(bitSize - 1) - 1L, bitSize))));
+		}
+		Pair<CongruenceClassInterval, CongruenceClassInterval> result = new Pair<>(newS, newT);
+		logger.debug("assume " + s + " <= " + t + ": " + result);
+		return result;
 	}
 
 	private enum CCIntervalKind {

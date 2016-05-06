@@ -3,13 +3,13 @@ package org.jakstab.analysis.newIntervals;
 import org.jakstab.analysis.Precision;
 import org.jakstab.util.Logger;
 
-public class IntervalPrecision implements Precision {
+class IntervalPrecision implements Precision {
 
 	private static final Logger logger = Logger.getLogger(IntervalPrecision.class);
 
 	private final int count;
 
-	public IntervalPrecision() {
+	IntervalPrecision() {
 		this(0);
 	}
 

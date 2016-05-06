@@ -504,7 +504,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	}
 
 	public static Set<Tuple<RTLNumber>> projectionFromConcretization(RTLExpression[] expressions, AbstractEvaluator<IntervalElement> s) {
-		logger.debug("projection from concretization for " + expressions.length + " expressions: " + Arrays.toString(expressions) + " with evaluator " + s);
+		logger.info("projection from concretization for " + expressions.length + " expressions: " + Arrays.toString(expressions) + " with evaluator " + s);
 		Tuple<Set<RTLNumber>> cValues = new Tuple<>(expressions.length);
 		for (int i = 0; i < expressions.length; i++) {
 			IntervalElement aValue = s.evalExpression(expressions[i]).abstractGet();
@@ -524,7 +524,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 				for (BitNumber l : aValue) {
 					k++;
 					if (k > maxConcretizationSize.getValue()) {
-						logger.debug("limiting " + aValue + " with " + aValue.size() + " elements to " + maxConcretizationSize.getValue() + " elements");
+						logger.warn("limiting " + aValue + " with " + aValue.size() + " elements to " + maxConcretizationSize.getValue() + " elements");
 						tmp = RTLNumber.ALL_NUMBERS;
 						break;
 					} else {
@@ -535,7 +535,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			}
 		}
 		Set<Tuple<RTLNumber>> result = Sets.crossProduct(cValues);
-		logger.debug("Projected " + result);
+		logger.info("Projected " + result);
 		return result;
 	}
 
@@ -1604,8 +1604,6 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		if (firstBit - 1 == bitSize) {
 			return result;
 		} else {
-			// this looks kinda fishy... so lets fail for the moment, remove the assert if this is a valid case...
-			// assert false : "Strange zero extension: " + firstBit + " to " + lastBit + " for " + this;
 			// keep only the bits from 0..firstBit-1 and lastBit+1 .. targetWidth-1, as the other bits
 			// should get set to 0 from the extension.
 			return result.and(number(bitMask(0, firstBit - 1) | bitMask(lastBit + 1, targetWidth - 1), targetWidth));
