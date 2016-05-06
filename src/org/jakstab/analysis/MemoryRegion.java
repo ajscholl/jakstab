@@ -17,16 +17,16 @@
  */
 package org.jakstab.analysis;
 
+import org.jakstab.util.Logger;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import org.jakstab.util.Logger;
 
 public class MemoryRegion implements LatticeElement, Comparable<MemoryRegion> {
 
 	private static final Logger logger = Logger.getLogger(MemoryRegion.class);
 	private static int maxId = -1;
-	
+
 	public static MemoryRegion TOP = new MemoryRegion("TOP_Invalid");
 	public static MemoryRegion GLOBAL = new MemoryRegion("Global");
 	public static MemoryRegion STACK = new MemoryRegion("Stack");
@@ -34,7 +34,7 @@ public class MemoryRegion implements LatticeElement, Comparable<MemoryRegion> {
 	private final String name;
 	private final int id;
 	private boolean summary;
-	
+
 	private static Map<String, MemoryRegion> regionMap;
 	static {
 		regionMap = new HashMap<String, MemoryRegion>();
@@ -42,7 +42,7 @@ public class MemoryRegion implements LatticeElement, Comparable<MemoryRegion> {
 		regionMap.put(GLOBAL.name, GLOBAL);
 		regionMap.put(STACK.name, STACK);
 	}
-	
+
 	public static MemoryRegion createAsSummary(String name) {
 		MemoryRegion region = create(name);
 		region.summary = true;
@@ -65,11 +65,11 @@ public class MemoryRegion implements LatticeElement, Comparable<MemoryRegion> {
 		this.name = name;
 		this.summary = false;
 	}
-	
+
 	public boolean isSummary() {
 		return summary;
 	}
-	
+
 	@Override
 	public String toString() {
 		return name;
@@ -98,9 +98,9 @@ public class MemoryRegion implements LatticeElement, Comparable<MemoryRegion> {
 	@Override
 	public boolean lessOrEqual(LatticeElement l) {
 		MemoryRegion other = (MemoryRegion)l;
-		return other.isTop() || isBot();
+		return other.isTop() || isBot() || this == other;
 	}
-	
+
 	@Override
 	public int compareTo(MemoryRegion o) {
 		if (o.id > this.id) return 1;
