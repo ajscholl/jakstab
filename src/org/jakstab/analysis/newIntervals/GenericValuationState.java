@@ -5,15 +5,9 @@ import org.jakstab.analysis.*;
 import org.jakstab.analysis.newIntervals.abstracted.*;
 import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.cfa.Location;
-import org.jakstab.rtl.expressions.RTLExpression;
-import org.jakstab.rtl.expressions.RTLMemoryLocation;
-import org.jakstab.rtl.expressions.RTLNumber;
-import org.jakstab.rtl.expressions.RTLVariable;
-import org.jakstab.util.IterableIterator;
-import org.jakstab.util.Logger;
+import org.jakstab.rtl.expressions.*;
+import org.jakstab.util.*;
 import org.jakstab.util.MapMap.EntryIterator;
-import org.jakstab.util.Pair;
-import org.jakstab.util.Tuple;
 
 import java.util.*;
 import java.util.Map.Entry;
@@ -86,10 +80,15 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		T address = eval.evalExpression(location.getAddress()).abstractGet();
 		MemoryRegion region = getRegion(location);
 		logger.debug("Evaluated address to " + address + " in region " + region);
-		setMemoryValue(address, value, region);
+		if (region.equals(MemoryRegion.TOP)) {
+			store.setTop(region);
+		} else {
+			setMemoryValue(address, value, region);
+		}
 	}
 
 	void setMemoryValue(T address, T value, MemoryRegion region) {
+		assert region != MemoryRegion.TOP;
 		int bitWidth = value.getBitWidth();
 		if (address.hasUniqueConcretization()) {
 			setMemoryValue(region, address.getUniqueConcretization().zExtLongValue(), bitWidth, value);
@@ -98,23 +97,47 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 				assert !Options.failFast.getValue() : "Overwritten too much memory (" + address + ") when writing " + address + " with value " + value + " with memory " + store;
 				for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
 					// TODO region
-					store.set(entryIt.getLeftKey(), entryIt.getRightKey(), value.getBitWidth(), entryIt.getValue().join(value).abstractGet());
+					// TODO what does TODO region mean?
+					T val = entryIt.getValue();
+					int valueBits = value.getBitWidth();
+					if (val.getBitWidth() < valueBits) {
+						// just assume these bits are set to 0
+						// this may not be always correct, but we can not handle it here as we do not know the endianness
+						// of the memory. also, if we have to jam the upper bits of an interval, we most likely will get
+						// TOP, so... yeah.
+						val = val.zeroExtend(valueBits).abstractGet();
+						// lets just fail for the moment and see how often this happens
+						assert false : "Unsound zero extension of " + entryIt.getValue() + " to " + val;
+					} else if (val.getBitWidth() > value.getBitWidth()) {
+						val = val.truncate(value.getBitWidth()).abstractGet();
+					}
+					store.set(entryIt.getLeftKey(), entryIt.getRightKey(), value.getBitWidth(), val.join(value).abstractGet());
 				}
 			}
 		} else {
 			logger.verbose("Setting multiple memory locations. Setting " + address + " to " + value + " in region " + region);
+			int i = 0;
 			for (BitNumber offset : address) {
-				AbstractValue oldVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
-				store.weakUpdate(region, offset.zExtLongValue(), bitWidth, value);
-				AbstractValue newVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
-				logger.verbose("Read " + offset + " with " + oldVal + ", Written " + newVal);
+				i++;
+				if (i < 100) {
+					AbstractValue oldVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
+					store.weakUpdate(region, offset.zExtLongValue(), bitWidth, value);
+					AbstractValue newVal = getMemoryValue(region, offset.zExtLongValue(), bitWidth);
+					logger.verbose("Read " + offset + " with " + oldVal + ", Written " + newVal);
+				} else {
+					store.setTop(region);
+					break;
+				}
 			}
 		}
 	}
 
 	private void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
-		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
-		store.set(region, offset, bitWidth, value);
+		if (region.equals(MemoryRegion.TOP)) {
+			store.setTop(region);
+		} else {
+			store.set(region, offset, bitWidth, value);
+		}
 	}
 
 	void setVariableValue(RTLVariable var, T value, MemoryRegion region) {
@@ -139,14 +162,21 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			return factory.bot(bitWidth).abstractGet();
 		}
 		List<T> results = new ArrayList<>();
+		int i = 0;
 		for (BitNumber offset : address) {
+			i++;
+			if (i > 100) {
+				return factory.createTop(bitWidth);
+			}
 			results.add(getMemoryValue(region, offset.zExtLongValue(), bitWidth));
 		}
 		return factory.delegateJoins(bitWidth, results);
 	}
 
 	private T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
-		assert !region.equals(MemoryRegion.TOP) : "PartitionedMemory does not like TOP";
+		if (region.equals(MemoryRegion.TOP)) {
+			return factory.createTop(bitWidth);
+		}
 		return store.get(region, offset, bitWidth);
 	}
 
@@ -169,7 +199,15 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			RTLVariable var = entry.getKey();
 			T v = entry.getValue();
 			Pair<AbstractDomain<T>, MemoryRegion> vv = other.getVariableValue(var);
-			widenedState.setVariableValue(var, v.widen(vv.getLeft().abstractGet()).abstractGet(), vv.getRight());
+			T u = vv.getLeft().abstractGet();
+			T r = v.widen(u).abstractGet();
+			assert v.lessOrEqual(r);
+			assert u.lessOrEqual(r);
+			// widen var region
+			MemoryRegion mr = vv.getRight().join(varRegions.get(var));
+			assert vv.getRight().lessOrEqual(mr);
+			assert varRegions.get(var).lessOrEqual(mr);
+			widenedState.setVariableValue(var, r, mr);
 		}
 		// Widen memory
 		for (EntryIterator<MemoryRegion, Long, T> entryIt = storeIterator(); entryIt.hasEntry(); entryIt.next()) {
@@ -177,10 +215,17 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			Long offset = entryIt.getRightKey();
 			T v = entryIt.getValue();
 			int bitWidth = v.getBitWidth();
-			widenedState.setMemoryValue(region, offset, bitWidth, v.widen(other.getMemoryValue(region, offset, bitWidth)).abstractGet());
+			T u = other.getMemoryValue(region, offset, bitWidth);
+			T r = v.widen(u).abstractGet();
+			assert v.lessOrEqual(r);
+			assert u.lessOrEqual(r);
+			widenedState.setMemoryValue(region, offset, bitWidth, r);
 		}
 		logger.debug("Widened " + this + " and " + other + " to " + widenedState);
-		assert join(other).lessOrEqual(widenedState) : this + " `join` " + other + " = " + join(other) + " !<= " + widenedState;
+		assert lessOrEqual(widenedState) : this + " is not less or equal than " + widenedState + ", but widen should be an upper bound operator";
+		assert other.lessOrEqual(widenedState) : other + " is not less or equal than " + widenedState + ", but widen should be an upper bound operator";
+		// the next line does not work if join is not a perfect join
+		// assert join(other).lessOrEqual(widenedState) : this + " `join` " + other + " = " + join(other) + " !<= " + widenedState;
 		return widenedState;
 	}
 
@@ -314,7 +359,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 
 		public AllocationCounter join(AllocationCounter other) {
-			Set<Location> keys = map.keySet();
+			Set<Location> keys = new FastSet<>(map.keySet());
 			keys.addAll(other.map.keySet());
 			HashMap<Location, Integer> newMap = new HashMap<>();
 			for (Location key : keys) {

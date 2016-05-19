@@ -89,12 +89,12 @@ public interface AbstractDomain<T extends Boxable<T>> extends AbstractState, Abs
 
 
 	/**
-	 * Multiply two abstract values.
+	 * Multiply two abstract values and double the bit-width.
 	 *
 	 * @param t The other abstract value.
 	 * @return The result, twice the bitsize.
 	 */
-	AbstractDomain<T> mul(T t);
+	AbstractDomain<T> mulDouble(T t);
 
 	/**
 	 * Unsigned division of the abstract value by another abstract value. Division by 0 is assumed to return bot.

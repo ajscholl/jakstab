@@ -70,6 +70,7 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	public BitNumber(long val, int bitSize) {
 		assert bitSize >= 1 && bitSize <= 64 : "bit-size too small or large";
 		mask = bit(bitSize) - 1L;
+		assert mask != 0L;
 		this.val = val & mask;
 		this.bitSize = bitSize;
 		Statistic.countBitNumberCreate();
@@ -290,17 +291,21 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	}
 
 	/**
-	 * LCM two numbers.
+	 * LCM two numbers. Returns nothing if overflow happens
 	 *
 	 * @param b The other number.
 	 * @return LCM.
 	 */
-	public BitNumber lcm(BitNumber b) {
+	public Optional<BitNumber> lcm(BitNumber b) {
 		assertCompatible(b);
 		BigInteger tmp = lcm(unsignedBigValue(), b.unsignedBigValue());
 		BitNumber result = valueOf(tmp.longValue());
-		assert result.unsignedBigValue().equals(tmp) : "Overflow in lcm: " + this + " `lcm` " + b + " = " + tmp + ", but this was truncated to " + result;
-		return result;
+		if (result.unsignedBigValue().equals(tmp)) {
+			return new Optional<>(result);
+		} else {
+			// Overflow in lcm
+			return Optional.none();
+		}
 	}
 
 	/**
@@ -402,6 +407,9 @@ public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 	 * @return 1 << n.
 	 */
 	public static long bit(int n) {
+		if (n > 0 && (n & 63) == 0) {
+			return 0L;
+		}
 		return 1L << n;
 	}
 

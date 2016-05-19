@@ -87,9 +87,37 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 			@Override
 			public AbstractDomain<T> visit(RTLOperation e) {
 				RTLExpression[] args = e.getOperands();
+				int opSize = e.getBitWidth();
+				boolean mayCast = false;
+				switch (e.getOperator()) {
+					case ROLC:
+					case RORC:
+					case NOT:
+					case NEG:
+					case AND:
+					case OR:
+					case XOR:
+					case PLUS:
+					case MUL:
+					case UDIV:
+					case SDIV:
+					case UMOD:
+					case SMOD:
+					case SHR:
+					case SAR:
+					case SHL:
+					case ROL:
+					case ROR:
+						mayCast = true;
+				}
 				List<AbstractDomain<T>> iArgs = new ArrayList<>(args.length);
 				for (RTLExpression arg : args) {
-					iArgs.add(evalExpression(arg));
+					AbstractDomain<T> v = evalExpression(arg);
+					if (v.getBitWidth() != opSize && mayCast) {
+						logger.warn("Casting " + v + " to " + opSize);
+						v = v.cast(bitSize);
+					}
+					iArgs.add(v);
 				}
 				long w = (long)bitSize;
 				AbstractDomain<T> op0, op1, op2;
@@ -182,7 +210,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 									op0 = op0.add(op1.abstractGet());
 									break;
 								case MUL:
-									op0 = op0.mul(op1.abstractGet());
+									op0 = op0.mulDouble(op1.abstractGet());
 									break;
 							}
 						}

@@ -290,9 +290,9 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	public IntervalElement cast(int bitSize) {
 		final IntervalElement result;
 		if (isTop()) {
-			result = top();
+			result = top(bitSize);
 		} else if (isBot()) {
-			result = bot();
+			result = bot(bitSize);
 		} else {
 			result = interval(minBits.zExtLongValue(), maxBits.zExtLongValue(), bitSize);
 		}
@@ -309,7 +309,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		assert !isBot();
 		final BitNumber result;
 		if (isTop() || maxBits.ult(minBits)) {
-			result = maxBits.uMaxVal();
+			result = BitNumber.uMaxVal(bitSize);
 		} else {
 			result = maxBits;
 		}
@@ -327,7 +327,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		assert !isBot();
 		final BitNumber result;
 		if (isTop() || maxBits.ult(minBits)) {
-			result = minBits.uMinVal();
+			result = BitNumber.uMinVal(bitSize);
 		} else {
 			result = minBits;
 		}
@@ -547,9 +547,9 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	@Override
 	public String getIdentifier() {
 		if (isTop()) {
-			return "TOP";
+			return "TOP_" + bitSize;
 		} else if (isBot()) {
-			return "BOT";
+			return "BOT_" + bitSize;
 		} else {
 			return "(|" + minBits + ", " + maxBits + "|)_" + bitSize;
 		}
@@ -653,6 +653,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 * @param t The interval to check.
 	 */
 	void assertCompatible(IntervalElement t) {
+		assert t != null;
 		assert bitSize == t.bitSize : "Incompatible intervals: " + this + " and " + t;
 	}
 
@@ -683,6 +684,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 */
 	IntervalElement meet(IntervalElement t) {
 		// TODO: is this over or under glb?
+		// FIXME: this is under glb
 		return invert().join(t.invert()).invert();
 	}
 
@@ -764,17 +766,17 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		IntervalElement g = f;
 		for (IntervalElement e : s) {
 			if (e.isTop() || e.kind == IntervalKind.INTERVAL && e.maxBits.ult(e.minBits)) {
-				f.extend(e);
+				f = f.extend(e);
 			}
 		}
 		for (IntervalElement e : s) {
 			g = bigger(g, f.gap(e));
 			f = f.extend(e);
 		}
-		IntervalElement result = bigger(f, g);
+		IntervalElement result = bigger(f.invert(), g).invert();
 		logger.debug("Joins of " + s + " = " + result);
 		for (IntervalElement e : s) {
-			assert e.lessOrEqual(result) : "joins returned something not in the interval";
+			assert e.lessOrEqual(result) : "Element " + e + " should be in interval " + result + ", but wasn't.";
 		}
 		return result;
 	}
@@ -805,7 +807,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			boolean tMinInThis = hasElement(t.minBits);
 			boolean tMaxInThis = hasElement(t.maxBits);
 			if (minInT && maxInT && tMinInThis && tMaxInThis) {
-				result = new IntervalElement[]{interval(minBits, t.maxBits), interval(maxBits, t.minBits)};
+				result = new IntervalElement[]{interval(minBits, t.maxBits), interval(t.minBits, maxBits)};
 			} else if (minInT && maxInT) {
 				result = new IntervalElement[]{this};
 			} else if (tMinInThis && tMaxInThis) {
@@ -813,7 +815,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			} else if (minInT && tMaxInThis) {
 				result = new IntervalElement[]{interval(minBits, t.maxBits)};
 			} else if (maxInT && tMinInThis) {
-				result = new IntervalElement[]{interval(maxBits, t.minBits)};
+				result = new IntervalElement[]{interval(t.minBits, maxBits)};
 			} else {
 				result = emptySet;
 			}
@@ -1058,9 +1060,8 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		}
 	}
 
-
 	@Override
-	public IntervalElement mul(IntervalElement t) {
+	public IntervalElement mulDouble(IntervalElement t) {
 		assertCompatible(t);
 		Set<IntervalElement> s = new FastSet<>();
 		for (IntervalElement u : cut()) {
@@ -1071,6 +1072,25 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			}
 		}
 		IntervalElement result = joins(extentBitSize().bitSize, s);
+		logger.debug(this + " *d " + t + " = " + result);
+		return result;
+	}
+
+	/**
+	 * Plain multiplication operator which does not double the bit-width.
+	 *
+	 * @param t The other interval.
+	 * @return The result.
+	 */
+	public IntervalElement mul(IntervalElement t) {
+		assertCompatible(t);
+		Set<IntervalElement> s = new FastSet<>();
+		for (IntervalElement u : cut()) {
+			for (IntervalElement v : t.cut()) {
+				Collections.addAll(s, u.mul_us(v));
+			}
+		}
+		IntervalElement result = joins(bitSize, s);
 		logger.debug(this + " * " + t + " = " + result);
 		return result;
 	}
@@ -1229,12 +1249,12 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 					BitNumber base = a.maxBits.sub(newMax);
 					if (a.minBits.ult(base)) {
 						result.add(interval(newMin, r.dec()));
-						result.add(interval(minBits.valueOf(0L), newMax));
+						result.add(interval(a.minBits.valueOf(0L), newMax));
 					} else {
 						result.add(interval(newMin, newMax));
 					}
 				} else {
-					result.add(interval(minBits.valueOf(0L), r.dec()));
+					result.add(interval(a.minBits.valueOf(0L), r.dec()));
 				}
 			}
 		}
@@ -1560,7 +1580,8 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			return result;
 		} else {
 			// this looks kinda fishy... so lets fail for the moment, remove the assert if this is a valid case...
-			assert false : "Strange sign extension: " + firstBit + " to " + lastBit + " for " + this;
+			// this actually is a valid case...
+			//assert false : "Strange sign extension: " + firstBit + " to " + lastBit + " for " + this;
 			if (result.kind == IntervalKind.INTERVAL) {
 				// create the result if the msb is sign-extended to firstBit:lastBit.
 				IntervalElement sRes = result.or(number(bitMask(firstBit, lastBit), targetWidth));
@@ -1782,7 +1803,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		List<IntervalElement> acc = new ArrayList<>();
 		for (IntervalElement u : splitNorth()) {
 			for (IntervalElement v : t.splitNorth()) {
-				acc.add(leq_w(false, u, v));
+				acc.add(leq_w(true, u, v));
 			}
 		}
 		IntervalElement result = joins(1, acc);
@@ -1889,8 +1910,8 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	}
 
 	/**
-	 * Compute the least upper bound of a set of intervals, ignoring the range 0..modulus - 1 when considering
-	 * which one is smaller.
+	 * Compute the least upper bound of a set of intervals, ignoring anything outside of the range 0..modulus - 1 when
+	 * considering which one is smaller.
 	 *
 	 * @param modulus The modulus.
 	 * @param c The set of intervals.
@@ -1909,17 +1930,17 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		IntervalElement g = f;
 		for (IntervalElement e : s) {
 			if (e.isTop() || e.kind == IntervalKind.INTERVAL && e.maxBits.ult(e.minBits)) {
-				f.joinMod(e, modulus);
+				f = f.joinMod(e, modulus);
 			}
 		}
 		for (IntervalElement e : s) {
 			g = biggerMod(g, f.gap(e), modulus);
 			f = f.joinMod(e, modulus);
 		}
-		IntervalElement result = biggerMod(f, g, modulus);
+		IntervalElement result = biggerMod(f.invert(), g, modulus).invert();
 		logger.debug("Joins of " + s + " = " + result);
 		for (IntervalElement e : s) {
-			assert e.lessOrEqual(result) : "joins returned something not in the interval";
+			assert e.lessOrEqual(result) : "Element " + e + " should be in interval " + result + ", but wasn't.";
 		}
 		return result;
 

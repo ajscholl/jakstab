@@ -441,14 +441,18 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 
 			@Override
 			public Set<AbstractState> visit(RTLUnknownProcedureCall stmt) {
-				logger.verbose("Found RTLUnknownProcedureCall: " + stmt);
-				assert !Options.failFast.getValue() : "Unknown procedure call: " + stmt;
-				return Collections.singleton((AbstractState) new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory()));
+				logger.warn("Found RTLUnknownProcedureCall: " + stmt);
+				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
+				for (RTLVariable var : stmt.getDefinedVariables()) {
+					newState.setVariableValue(var, top(var.getBitWidth()), newState.getRegion(var));
+				}
+				newState.store.setTop();
+				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLHavoc stmt) {
-				logger.verbose("Found RTLHavoc: " + stmt);
+				logger.warn("Found RTLHavoc: " + stmt);
 				GenericValuationState<CongruenceClassInterval> newState = new GenericValuationState<>(s);
 				RTLVariable var = stmt.getVariable();
 				newState.setVariableValue(var, top(var.getBitWidth()), newState.getVariableValue(var).getRight());
@@ -498,7 +502,7 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 
 			@Override
 			public Set<AbstractState> visitDefault(RTLStatement stmt) {
-				logger.verbose("Found RTLStatement: " + stmt);
+				logger.warn("Found RTLStatement: " + stmt);
 				assert !Options.failFast.getValue() : "Unknown statement: " + stmt;
 				return Collections.singleton((AbstractState) new GenericValuationState<>(CongruenceClassIntervalFactory.getFactory()));
 			}
