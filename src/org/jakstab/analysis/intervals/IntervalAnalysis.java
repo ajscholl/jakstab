@@ -17,8 +17,6 @@
  */
 package org.jakstab.analysis.intervals;
 
-import java.util.*;
-
 import org.jakstab.AnalysisProperties;
 import org.jakstab.Program;
 import org.jakstab.analysis.*;
@@ -29,13 +27,19 @@ import org.jakstab.cfa.Location;
 import org.jakstab.cfa.StateTransformer;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
-import org.jakstab.util.*;
+import org.jakstab.util.Logger;
 import org.jakstab.util.MapMap.EntryIterator;
+import org.jakstab.util.Pair;
+
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * A reduced interval congruence analysis with regioned memory. Inspired by
- * Codesurfer's VSA domain. 
- * 
+ * Codesurfer's VSA domain.
+ *
  * @author Johannes Kinder
  */
 public class IntervalAnalysis implements ConfigurableProgramAnalysis {
@@ -66,7 +70,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 	@Override
 	public AbstractState initStartState(Location label) {
 		//IntervalState init = new IntervalState();
-		/*init.setValue(Program.getProgram().getArchitecture().stackPointer(), 
+		/*init.setValue(Program.getProgram().getArchitecture().stackPointer(),
 				new IntervalElement(MemoryRegion.STACK, 0, 0, 0, 32));*/
 		//return init;
 		return new ValuationState(valueFactory);
@@ -77,13 +81,13 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 	 */
 	@Override
 	public AbstractState merge(AbstractState s1, AbstractState s2, Precision precision) {
-		
+
 		// Widen s2 towards s1.
 		//return ((IntervalState)s2).widen((IntervalState)s1);
-		
+
 		if (s2.isTop() || s1.isBot()) return s2;
 		if (s1.isTop()) return s1;
-		
+
 		ValuationState current = (ValuationState)s2;
 		ValuationState towards = (ValuationState)s1;
 
@@ -95,17 +99,17 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			IntervalElement v = (IntervalElement)entry.getValue();
 			widenedState.setVariableValue(var, v.widen((IntervalElement)towards.getVariableValue(var)));
 		}
-		
+
 		// Widen memory
 		for (EntryIterator<MemoryRegion, Long, AbstractDomainElement> entryIt = current.storeIterator(); entryIt.hasEntry(); entryIt.next()) {
 			MemoryRegion region = entryIt.getLeftKey();
 			Long offset = entryIt.getRightKey();
 			IntervalElement v = (IntervalElement)entryIt.getValue();
 			int bitWidth = v.getBitWidth();
-			widenedState.setMemoryValue(region, offset, bitWidth, 
+			widenedState.setMemoryValue(region, offset, bitWidth,
 					v.widen((IntervalElement)towards.getMemoryValue(region, offset, bitWidth)));
 		}
-		
+
 		return widenedState;
 
 	}
@@ -120,10 +124,12 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		final ValuationState iState = (ValuationState)state;
 
 		return Collections.singleton(statement.accept(new DefaultStatementVisitor<AbstractState>() {
-			
+
 			@Override
 			protected AbstractState visitDefault(RTLStatement stmt) {
-				assert /*!Options.failFast.getValue()*/ false : "no visitor case found for statement: " + stmt;
+				if (!(stmt instanceof RTLSkip)) {
+					assert /*!Options.failFast.getValue()*/ false : "no visitor case found for statement: " + stmt;
+				}
 				return state;
 			}
 
@@ -136,7 +142,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				post.setVariableValue((RTLVariable)lhs, evaledRhs);
 				return post;
 			}
-			
+
 			@Override
 			public AbstractState visit(RTLMemoryAssignment stmt) {
 				ValuationState post = new ValuationState(iState);
@@ -256,9 +262,9 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 
 			@Override
 			public AbstractState visit(RTLAssume stmt) {
-				
+
 				ValuationState post = new ValuationState(iState);
-				
+
 				RTLExpression assumption = stmt.getAssumption();
 				return restrictAssume(post, assumption, false);
 			}
@@ -275,10 +281,10 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 					// TODO: Detect whether this allocation is unique to allow strong updates
 					newRegion = MemoryRegion.createAsSummary("alloc" + stmt.getLabel());
 				}
-				
-				IntervalElement basePointer = new IntervalElement(newRegion, 
+
+				IntervalElement basePointer = new IntervalElement(newRegion,
 						ExpressionFactory.createNumber(0, 32));
-				
+
 				if (lhs instanceof RTLVariable) {
 					post.setVariableValue((RTLVariable)lhs, basePointer);
 				} else {
@@ -293,16 +299,16 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			@Override
 			public AbstractState visit(RTLHavoc stmt) {
 				ValuationState post = new ValuationState(iState);
-				
+
 				// Only create a single state with the havoc range, since this analysis
 				// is not path sensitive
-				post.setVariableValue(stmt.getVariable(), 
-						//new IntervalElement(ExpressionFactory.getInstance().createNumber(0, stmt.getVariable().getBitWidth()), 
+				post.setVariableValue(stmt.getVariable(),
+						//new IntervalElement(ExpressionFactory.getInstance().createNumber(0, stmt.getVariable().getBitWidth()),
 								//(RTLNumber)stmt.getMaximum()));
-						new IntervalElement(MemoryRegion.GLOBAL, 0, ((RTLNumber)stmt.getMaximum()).longValue(), 1, 
+						new IntervalElement(MemoryRegion.GLOBAL, 0, ((RTLNumber)stmt.getMaximum()).longValue(), 1,
 								stmt.getVariable().getBitWidth())
 						);
-				
+
 				return post;
 			}
 
@@ -312,11 +318,11 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				for (RTLVariable var : stmt.getDefinedVariables()) {
 					post.setVariableValue(var, IntervalElement.getTop(var.getBitWidth()));
 				}
-				post.setMemoryValue(IntervalElement.getTop(Program.getProgram().getArchitecture().getAddressBitWidth()), 
+				post.setMemoryValue(IntervalElement.getTop(Program.getProgram().getArchitecture().getAddressBitWidth()),
 						32, IntervalElement.getTop(32));
 				return post;
 			}
-			
+
 		}));
 	}
 
@@ -332,7 +338,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			// 		 one successor state.
 			if (t instanceof BasedNumberValuation) {
 				BasedNumberValuation exState = (BasedNumberValuation)t;
-				for (Map.Entry<RTLVariable, BasedNumberElement> entry : 
+				for (Map.Entry<RTLVariable, BasedNumberElement> entry :
 					exState.getVariableValuation()) {
 					RTLVariable var = entry.getKey();
 					BasedNumberElement exVal = entry.getValue();
@@ -342,16 +348,16 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 						if (strengthenedState == null) {
 							strengthenedState = new ValuationState(state);
 						}
-						strengthenedState.setVariableValue(var, 
+						strengthenedState.setVariableValue(var,
 								new IntervalElement(exVal.getRegion(),
 								exVal.getNumber()));
-						//logger.debug("Strengthened state " + state.getIdentifier() + 
+						//logger.debug("Strengthened state " + state.getIdentifier() +
 						//		" by setting " + var + " to " + state.getValue(var));
 					}
 				}
 			}
 		}
-		
+
 		return strengthenedState == null ? state : strengthenedState;
 	}
 
@@ -366,7 +372,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		return CPAOperators.stopJoin(s, reached, precision);
 	}
 
-	
+
 	private RTLExpression addClause(RTLExpression formula, RTLExpression clause) {
 		if (formula != null) {
 			return ExpressionFactory.createAnd(formula, clause);
@@ -374,15 +380,15 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 			return clause;
 		}
 	}
-	
+
 	public RTLExpression getStateFormula(ValuationState state) {
 		RTLExpression result = null;
-		
+
 		for (Iterator<Map.Entry<RTLVariable,AbstractDomainElement>> entryIt = state.variableIterator(); entryIt.hasNext();) {
 			Map.Entry<RTLVariable,AbstractDomainElement> entry = entryIt.next();
 			RTLVariable var = entry.getKey();
 			IntervalElement interval = (IntervalElement)entry.getValue();
-			
+
 			if (interval.size() == 1) {
 				result = addClause(result, ExpressionFactory.createEqual(
 						var, ExpressionFactory.createNumber(interval.getLeft(), var.getBitWidth())));
@@ -398,7 +404,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				}
 			}
 		}
-		
+
 		if (result == null) {
 			result = ExpressionFactory.TRUE;
 		}
