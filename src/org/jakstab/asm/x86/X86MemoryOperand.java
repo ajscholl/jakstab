@@ -19,12 +19,12 @@
  * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
  * CA 95054 USA or visit www.sun.com if you need additional information or
  * have any questions.
- *  
+ *
  */
 
-/* 
- * Original code for this class taken from the Java HotSpot VM. 
- * Modified for use with the Jakstab project. All modifications 
+/*
+ * Original code for this class taken from the Java HotSpot VM.
+ * Modified for use with the Jakstab project. All modifications
  * Copyright 2007-2015 Johannes Kinder <jk@jakstab.org>
  */
 
@@ -37,7 +37,7 @@ import org.jakstab.asm.SymbolFinder;
 /**
  *  Represents a memory operand pointed to by Base Index Scale Displacement on x86.
  *  May actually be an absolute address if base and index are null.
- *  
+ *
  *  Changed for correct AT&T syntax by Johannes Kinder
  *
  */
@@ -74,15 +74,15 @@ public class X86MemoryOperand extends MemoryOperand {
 		this(dataType, null, null, null, disp, 0);
 	}
 
-	
+
 	/* (non-Javadoc)
 	 * @see org.jakstab.asm.Operand#toString(long, org.jakstab.asm.SymbolFinder)
 	 */
 	@Override
 	public String toString(long currentPc, SymbolFinder symFinder) {
 		if (getBase() == null && getIndex() == null && getSegmentRegister() == null)
-			return symFinder.getSymbolFor(getDisplacement());
-		else return toString();
+			return '*' + symFinder.getSymbolFor(getDisplacement());
+		else return '*' + toString();
 	}
 
 	@Override
@@ -105,7 +105,7 @@ public class X86MemoryOperand extends MemoryOperand {
 			else {
 				buf.append(disp);
 			}
-		} 
+		}
 
 		if( (base != null) || (index != null) || (scaleVal > 1) )
 			buf.append('(');
