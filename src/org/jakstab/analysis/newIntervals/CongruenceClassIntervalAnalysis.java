@@ -9,6 +9,7 @@ import org.jakstab.analysis.newIntervals.statistic.Statistic;
 import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.cfa.CFAEdge;
 import org.jakstab.cfa.Location;
+import org.jakstab.cfa.RTLLabel;
 import org.jakstab.cfa.StateTransformer;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
@@ -17,6 +18,8 @@ import org.jakstab.util.Logger;
 import org.jakstab.util.Pair;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import static org.jakstab.analysis.newIntervals.CongruenceClassInterval.*;
@@ -62,7 +65,7 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 		IntervalPrecision p = (IntervalPrecision) precision;
 		if (p.getCount() >= threshold.getValue()) {
 			//widen
-			logger.warn("Will widen now");
+			logger.verbose("Will widen now");
 			return ((GenericValuationState<CongruenceClassInterval>) s1).widen((GenericValuationState<CongruenceClassInterval>) s2);
 		} else {
 			return CPAOperators.mergeJoin(s1, s2, precision);
@@ -114,6 +117,8 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 				default:
 					logger.warn("Ignoring equality in operation: " + arg + " != " + newInt);
 			}
+		} else if (arg instanceof RTLNumber) {
+			logger.debug("Ignoring equality with constant: " + arg + " != " + newInt);
 		} else {
 			logger.warn("Ignoring equality: " + arg + " != " + newInt);
 		}
@@ -158,6 +163,8 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 				default:
 					logger.warn("Ignoring equality in operation: " + arg + " == " + newInt);
 			}
+		} else if (arg instanceof RTLNumber) {
+			logger.debug("Ignoring equality with constant: " + arg + " == " + newInt);
 		} else {
 			logger.warn("Ignoring equality: " + arg + " == " + newInt);
 		}
@@ -354,8 +361,30 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 		}
 	}
 
+	private static final Map<RTLLabel, Integer> visitedMap = new HashMap<>();
+	private static RTLLabel loopingLabel = null;
+
+	private static void countPost(RTLStatement statement, GenericValuationState<CongruenceClassInterval> s) {
+		RTLLabel thisLabel = statement.getLabel();
+		if (loopingLabel == null) {
+			Integer numVisited = visitedMap.get(thisLabel);
+			if (numVisited == null) {
+				visitedMap.put(thisLabel, 1);
+			} else if (numVisited > 25) {
+				visitedMap.clear();
+				loopingLabel = thisLabel;
+			} else {
+				visitedMap.put(thisLabel, numVisited + 1);
+			}
+		}
+		if (thisLabel.equals(loopingLabel)) {
+			logger.warn("Potential loop at " + thisLabel + " with state " + s);
+		}
+	}
+
 	public static Set<AbstractState> abstractPost(final RTLStatement statement, final GenericValuationState<CongruenceClassInterval> s) {
 		logger.info("start processing abstractPost(" + statement + ") " + statement.getLabel());
+		countPost(statement, s);
 
 		Set<AbstractState> res = statement.accept(new DefaultStatementVisitor<Set<AbstractState>>() {
 
@@ -565,6 +594,9 @@ public class CongruenceClassIntervalAnalysis implements ConfigurableProgramAnaly
 				"\t\nand joinAll = " + Lattices.joinAll(reached) +
 				"\t\nand precision " + precision +
 				"\t\nresult = " + stop);
+		if (!stop && loopingLabel != null) {
+			logger.warn("Not stopping join in " + s + " with reached set " + reached);
+		}
         return stop;
     }
 }

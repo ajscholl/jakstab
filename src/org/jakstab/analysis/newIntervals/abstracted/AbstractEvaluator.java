@@ -114,7 +114,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 				for (RTLExpression arg : args) {
 					AbstractDomain<T> v = evalExpression(arg);
 					if (v.getBitWidth() != opSize && mayCast) {
-						logger.warn("Casting " + v + " to " + opSize);
+						logger.info("Casting " + v + " to " + opSize);
 						v = v.cast(bitSize);
 					}
 					iArgs.add(v);
@@ -198,7 +198,7 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 							op1 = iArgs.get(i);
 							switch (e.getOperator()) {
 								case AND:
-									op0 = op1.and(op1.abstractGet());
+									op0 = op0.and(op1.abstractGet());
 									break;
 								case OR:
 									op0 = op0.or(op1.abstractGet());

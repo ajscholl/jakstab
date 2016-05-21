@@ -62,7 +62,7 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 		IntervalPrecision p = (IntervalPrecision) precision;
 		if (p.getCount() >= threshold.getValue()) {
 			//widen
-			logger.warn("Will widen now");
+			logger.verbose("Will widen now");
 			return ((GenericValuationState<IntervalElement>) s1).widen((GenericValuationState<IntervalElement>) s2);
 		} else {
 			return CPAOperators.mergeJoin(s1, s2, precision);
@@ -114,6 +114,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				default:
 					logger.warn("Ignoring equality in operation: " + arg + " != " + newInt);
 			}
+		} else if (arg instanceof RTLNumber) {
+			logger.debug("Ignoring equality with constant: " + arg + " != " + newInt);
 		} else {
 			logger.warn("Ignoring equality: " + arg + " != " + newInt);
 		}
@@ -158,6 +160,8 @@ public class IntervalAnalysis implements ConfigurableProgramAnalysis {
 				default:
 					logger.warn("Ignoring equality in operation: " + arg + " == " + newInt);
 			}
+		} else if (arg instanceof RTLNumber) {
+			logger.debug("Ignoring equality with constant: " + arg + " == " + newInt);
 		} else {
 			logger.warn("Ignoring equality: " + arg + " == " + newInt);
 		}

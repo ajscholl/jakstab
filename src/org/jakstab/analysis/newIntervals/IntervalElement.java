@@ -389,7 +389,12 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 
 	@Override
 	public boolean equals(Object o) {
-		return o != null && o.getClass() == getClass() && compareTo((IntervalElement) o) == 0;
+		if (o != null && o.getClass() == getClass()) {
+			IntervalElement t = (IntervalElement) o;
+			return bitSize == t.bitSize && compareTo(t) == 0;
+		} else {
+			return false;
+		}
 	}
 
 	@Override
@@ -416,7 +421,12 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			return RTLNumber.ALL_NUMBERS;
 		}
 		Set<RTLNumber> s = new FastSet<>();
+		int i = 0;
 		for (BitNumber l : this) {
+			i++;
+			if (i > 100) {
+				return RTLNumber.ALL_NUMBERS;
+			}
 			s.add(ExpressionFactory.createNumber(l.sExtLongValue(), bitSize));
 		}
 		return s;

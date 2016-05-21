@@ -266,6 +266,10 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 				for (BitNumber l : aValue) {
 					k++;
 					// TODO: limit size?
+					if (k > 100) {
+						tmp = RTLNumber.ALL_NUMBERS;
+						break;
+					}
 					tmp.add(ExpressionFactory.createNumber(l.sExtLongValue(), aValue.bitSize));
 				}
 				cValues.set(i, tmp);
@@ -285,7 +289,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 			return RTLNumber.ALL_NUMBERS;
 		}
 		Set<RTLNumber> s = new FastSet<>();
+		int i = 0;
 		for (BitNumber l : this) {
+			i++;
+			if (i > 100) {
+				return RTLNumber.ALL_NUMBERS;
+			}
 			s.add(ExpressionFactory.createNumber(l.sExtLongValue(), bitSize));
 		}
 		return s;
@@ -519,7 +528,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	}
 
 	/**
-	 * Create the congruence information for addition. Extends the interval t by t + (m - 2^w `rem` m), covering the case of overflow.
+	 * Create the congruence information for addition. Extends the interval t by t + (m - 2^w `rem` m) and
+	 * t + (2^w `rem` m), covering the case of overflow.
 	 *
 	 * @param t The modulus interval.
 	 * @param m The modulus.
@@ -527,13 +537,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	 */
 	private static IntervalElement mkAddCongruence(IntervalElement t, BitNumber m) {
 		assert t.getBitWidth() == m.getBitWidth();
-		IntervalElement x = t.num_rem_cc(m);
 		List<IntervalElement> c = new ArrayList<>();
-		c.add(x);
 		BitNumber overflowPart = m.valueOf(t.maxIntervalSize().remainder(m.unsignedBigValue()).longValue());
-		c.add(x.add(IntervalElement.number(m.sub(overflowPart))).num_rem_cc(m));
-		c.add(x.add(IntervalElement.number(overflowPart)).num_rem_cc(m));
-		return IntervalElement.joins(m.getBitWidth(), c);
+		c.add(t.num_rem_cc(m));
+		c.add(t.add(IntervalElement.number(m.sub(overflowPart))).num_rem_cc(m));
+		c.add(t.sub(IntervalElement.number(overflowPart)).num_rem_cc(m));
+		return IntervalElement.joinsMod(m, c);
 	}
 
 	@Override
@@ -556,6 +565,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 				}
 			}
 		} else if (t.kind == CCIntervalKind.MOD) {
+			// TODO rewrite to just swap arguemtns, reduce duplication
 			if (additionNoOverflow(getRange(), t.range)) {
 				result = modInterval(getRange().add(t.range), getRange().add(t.modRange).num_rem_cc(t.modulus), t.modulus);
 			} else {
@@ -586,7 +596,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 				BigInteger tmp = modRange.maxIntervalSize().remainder(modulus.unsignedBigValue());
 				xs.add(IntervalElement.number(modulus.valueOf(tmp.longValue())));
 			}
-			result = modInterval(range.negate(), IntervalElement.joins(bitSize, xs), modulus);
+			result = modInterval(range.negate(), IntervalElement.joinsMod(modulus, xs), modulus);
 		} else {
 			result = zeroInterval(getRange().negate());
 		}
@@ -667,6 +677,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 						assert t.kind == CCIntervalKind.MOD;
 						if (n.compareTo(t.range.intervalMax().unsignedBigValue().multiply(uu)) > 0) {
 							BitNumber r = t.modulus.mul(u);
+							// TODO tmp same todo as below
 							IntervalElement tmp = IntervalElement.joins(bitSize, Arrays.asList(ui.mul(t.range).intersection(ui.mul(t.modRange))));
 							if (t.modulus.uMulOverflow(u)) {
 								if (r.zExtLongValue() == 0L) {
@@ -683,6 +694,7 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 						} else {
 							BigInteger m = uu.multiply(t.modulus.unsignedBigValue()).gcd(n);
 							if (m.equals(n)) {
+								// TODO in this case, we could use meet for cc-intervals, maybe generating congruence information - or join cc-zero-intervals, generating the information
 								result = zeroInterval(IntervalElement.joins(bitSize, Arrays.asList(ui.mul(t.range).intersection(ui.mul(t.modRange)))));
 							} else {
 								// overflow occurs
@@ -697,8 +709,16 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 			if (t.hasUniqueConcretization()) {
 				// avoid duplication
 				result = t.mulHelper(this);
-			} else {
-				result = zeroInterval(getRange().mul(t.getRange()));
+			} else if (kind == CCIntervalKind.MOD && t.kind == CCIntervalKind.MOD &&
+						modRange.hasUniqueConcretization() && t.modRange.hasUniqueConcretization() &&
+						!range.intervalMax().uMulOverflow(t.range.intervalMax())) {
+					BitNumber c1 = modRange.getUniqueConcretization();
+					BitNumber c2 = t.modRange.getUniqueConcretization();
+					BitNumber m = c1.mul(t.modulus).gcd(c2.mul(modulus)).gcd(modulus.mul(t.modulus));
+					BitNumber r = c1.mul(c2).urem(m);
+					result = modInterval(range.mul(t.range), IntervalElement.number(r), m);
+				} else {
+					result = zeroInterval(getRange().mul(t.getRange()));
 			}
 		}
 		logger.debug(this + " * " + t + " = " + result);
@@ -1372,15 +1392,21 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 	@Override
 	public AbstractDomain<CongruenceClassInterval> widen(CongruenceClassInterval t) {
 		assertCompatible(t);
+		final CongruenceClassInterval result;
 		if (kind == CCIntervalKind.MOD && t.kind == CCIntervalKind.MOD) {
-			return modInterval(range.widen(t.range), modRange.widen(t.modRange), modulus.gcd(t.modulus));
+			BitNumber newMod = modulus.gcd(t.modulus);
+			IntervalElement newModRange = modRange.widen(t.modRange);
+			result = modInterval(range.widen(t.range), newModRange.num_rem_cc(newMod), newMod);
 		} else if (kind == CCIntervalKind.MOD) {
-			return modInterval(range.widen(t.getRange()), modRange.widen(t.getRange().unsignedRem(IntervalElement.number(modulus))), modulus);
+			result = modInterval(range.widen(t.getRange()), modRange.widen(t.getRange().unsignedRem(IntervalElement.number(modulus))), modulus);
 		} else if (t.kind == CCIntervalKind.MOD) {
-			return modInterval(getRange().widen(t.range), t.modRange.widen(getRange().unsignedRem(IntervalElement.number(t.modulus))), t.modulus);
+			result = modInterval(getRange().widen(t.range), t.modRange.widen(getRange().unsignedRem(IntervalElement.number(t.modulus))), t.modulus);
 		} else {
-			return zeroInterval(getRange().widen(t.getRange()));
+			result = zeroInterval(getRange().widen(t.getRange()));
 		}
+		assert lessOrEqual(result);
+		assert t.lessOrEqual(result);
+		return result;
 	}
 
 	@Override
