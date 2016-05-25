@@ -692,10 +692,9 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 	 * @param t The other value.
 	 * @return The greatest lower bound.
 	 */
-	IntervalElement meet(IntervalElement t) {
-		// TODO: is this over or under glb?
-		// FIXME: this is under glb
-		return invert().join(t.invert()).invert();
+	@Override
+	public IntervalElement meet(IntervalElement t) {
+		return joins(bitSize, Arrays.asList(intersection(t)));
 	}
 
 	/**
@@ -2068,55 +2067,53 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		}
 	}
 
-	static Pair<IntervalElement, IntervalElement> assumeULeq(IntervalElement s, IntervalElement t) {
-		s.assertCompatible(t);
-		int bitSize = s.bitSize;
+	public Pair<IntervalElement, IntervalElement> assumeULeq(IntervalElement t) {
+		assertCompatible(t);
 		final IntervalElement newS;
 		if (t.isBot()) {
 			newS = bot(bitSize);
 		} else if (t.hasElement(bit(bitSize) - 1L)) {
-			newS = s;
+			newS = this;
 		} else {
 			assert t.kind == IntervalKind.INTERVAL;
-			newS = s.meet(interval(BitNumber.valueOf(0L, bitSize), t.maxBits));
+			newS = meet(interval(BitNumber.valueOf(0L, bitSize), t.maxBits));
 		}
 		final IntervalElement newT;
-		if (s.isBot()) {
+		if (isBot()) {
 			newT = bot(bitSize);
-		} else if (s.hasElement(0L)) {
+		} else if (hasElement(0L)) {
 			newT = t;
 		} else {
-			assert s.kind == IntervalKind.INTERVAL;
-			newT = t.meet(interval(s.minBits, BitNumber.valueOf(bit(bitSize) - 1L, bitSize)));
+			assert kind == IntervalKind.INTERVAL;
+			newT = t.meet(interval(minBits, BitNumber.valueOf(bit(bitSize) - 1L, bitSize)));
 		}
 		Pair<IntervalElement, IntervalElement> result = new Pair<>(newS, newT);
-		logger.debug("assume " + s + " <= " + t + ": " + result);
+		logger.debug("assume " + this + " <= " + t + ": " + result);
 		return result;
 	}
 
-	static Pair<IntervalElement, IntervalElement> assumeSLeq(IntervalElement s, IntervalElement t) {
-		s.assertCompatible(t);
-		int bitSize = s.bitSize;
+	public Pair<IntervalElement, IntervalElement> assumeSLeq(IntervalElement t) {
+		assertCompatible(t);
 		final IntervalElement newS;
 		if (t.isBot()) {
 			newS = bot(bitSize);
 		} else if (t.hasElement(bit(bitSize - 1) - 1L)) {
-			newS = s;
+			newS = this;
 		} else {
 			assert t.kind == IntervalKind.INTERVAL;
-			newS = s.meet(interval(BitNumber.valueOf(bit(bitSize) - 1L, bitSize), t.maxBits));
+			newS = meet(interval(BitNumber.valueOf(bit(bitSize) - 1L, bitSize), t.maxBits));
 		}
 		final IntervalElement newT;
-		if (s.isBot()) {
+		if (isBot()) {
 			newT = bot(bitSize);
-		} else if (s.hasElement(bit(bitSize) - 1L)) {
+		} else if (hasElement(bit(bitSize) - 1L)) {
 			newT = t;
 		} else {
-			assert s.kind == IntervalKind.INTERVAL;
-			newT = t.meet(interval(s.minBits, BitNumber.valueOf(bit(bitSize - 1) - 1L, bitSize)));
+			assert kind == IntervalKind.INTERVAL;
+			newT = t.meet(interval(minBits, BitNumber.valueOf(bit(bitSize - 1) - 1L, bitSize)));
 		}
 		Pair<IntervalElement, IntervalElement> result = new Pair<>(newS, newT);
-		logger.debug("assume " + s + " <= " + t + ": " + result);
+		logger.debug("assume " + this + " <= " + t + ": " + result);
 		return result;
 	}
 

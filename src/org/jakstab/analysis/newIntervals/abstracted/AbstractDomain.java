@@ -6,6 +6,7 @@ import org.jakstab.analysis.LatticeElement;
 import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.rtl.BitVectorType;
 import org.jakstab.rtl.expressions.RTLNumber;
+import org.jakstab.util.Pair;
 
 import java.util.Collection;
 
@@ -30,6 +31,14 @@ public interface AbstractDomain<T extends Boxable<T>> extends AbstractState, Abs
 
 	@Override
 	AbstractDomain<T> join(LatticeElement l);
+
+	/**
+	 * Compute the greatest lower bound of two elements.
+	 *
+	 * @param t The other element.
+	 * @return Their meet.
+	 */
+	AbstractDomain<T> meet(T t);
 
 	@Override
 	boolean lessOrEqual(LatticeElement l);
@@ -272,6 +281,22 @@ public interface AbstractDomain<T extends Boxable<T>> extends AbstractState, Abs
 	 * @return The result.
 	 */
 	AbstractDomain<T> unsignedLessThanOrEqual(T t);
+
+	/**
+	 * Assume that this element is less or equal than another.
+	 *
+	 * @param t The greater or equal value.
+	 * @return A pair containing the new abstract values for both operands.
+	 */
+	Pair<T, T> assumeULeq(T t);
+
+	/**
+	 * Assume that this element is less or equal than another.
+	 *
+	 * @param t The greater or equal value.
+	 * @return A pair containing the new abstract values for both operands.
+	 */
+	Pair<T, T> assumeSLeq(T t);
 
 	/**
 	 * Widen one abstract value with another one.
