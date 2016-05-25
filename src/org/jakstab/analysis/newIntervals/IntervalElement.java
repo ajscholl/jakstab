@@ -2012,22 +2012,22 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 			result = top();
 		} else {
 			IntervalElement tmp = join(t);
-			BitNumber one = BitNumber.valueOf(1L, bitSize);
 			BitNumber two = BitNumber.valueOf(2L, bitSize);
 			if (tmp.equals(interval(minBits, t.maxBits))) {
 				result = interval(minBits, t.maxBits).join(
-						interval(minBits, maxBits.mul(two).sub(minBits).add(one)));
+						interval(minBits, maxBits.mul(two).sub(minBits).inc()));
 			} else if (tmp.equals(interval(t.minBits, maxBits))) {
 				result = interval(t.minBits, maxBits).join(
-						interval(minBits.mul(two).sub(maxBits).sub(one), maxBits));
+						interval(minBits.mul(two).sub(maxBits).dec(), maxBits));
 			} else if (t.hasElement(minBits) && t.hasElement(maxBits)) {
-				result = t.join(interval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).add(one)));
+				result = t.join(interval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).inc()));
 			} else {
 				result = top();
 			}
 		}
 		logger.debug(this + " `widen` " + t + " = " + result);
 		assert lessOrEqual(result) && t.lessOrEqual(result) : "Widen returned something smaller than one of the arguments";
+		assert equals(result) || result.isTop() || result.size().compareTo(size().add(size())) >= 0 : "Widen did not fulfill property of the paper";
 		return result;
 	}
 

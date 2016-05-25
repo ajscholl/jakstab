@@ -564,12 +564,8 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 				}
 			}
 		} else if (t.kind == CCIntervalKind.MOD) {
-			// TODO rewrite to just swap arguemtns, reduce duplication
-			if (additionNoOverflow(getRange(), t.range)) {
-				result = modInterval(getRange().add(t.range), getRange().add(t.modRange).num_rem_cc(t.modulus), t.modulus);
-			} else {
-				result = modInterval(getRange().add(t.range), mkAddCongruence(getRange().add(t.modRange), t.modulus), t.modulus);
-			}
+			// reduce duplication
+			result = t.add(this).abstractGet();
 		} else {
 			result = zeroInterval(getRange().add(t.getRange()));
 		}
@@ -676,15 +672,21 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 						assert t.kind == CCIntervalKind.MOD;
 						if (n.compareTo(t.range.intervalMax().unsignedBigValue().multiply(uu)) > 0) {
 							BitNumber r = t.modulus.mul(u);
-							// TODO tmp same todo as below
-							IntervalElement tmp = IntervalElement.joins(bitSize, Arrays.asList(ui.mul(t.range).intersection(ui.mul(t.modRange))));
+							// We can join intervals better as cc-intervals.
+							// Therefore, convert each into a cc-interval and join them.
+							CongruenceClassInterval tmp = bot();
+							for (IntervalElement x : ui.mul(t.range).intersection(ui.mul(t.modRange))) {
+								// intersection only produces up to 2 elements, so join is fine
+								tmp.join(zeroInterval(x));
+							}
 							if (t.modulus.uMulOverflow(u)) {
 								if (r.zExtLongValue() == 0L) {
 									// overflow in modulus, but exactly to a multiple of 2^w
-									result = modInterval(tmp, IntervalElement.number(z), u);
+									// take range of joined interval, this new modulus is better
+									result = modInterval(tmp.getRange(), IntervalElement.number(z), u);
 								} else {
 									// overflow in modulus
-									result = zeroInterval(tmp);
+									result = tmp;
 								}
 							} else {
 								// no overflow as (max (t ∩ [0..m-1])) < intervalMax s holds
@@ -693,8 +695,12 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 						} else {
 							BigInteger m = uu.multiply(t.modulus.unsignedBigValue()).gcd(n);
 							if (m.equals(n)) {
-								// TODO in this case, we could use meet for cc-intervals, maybe generating congruence information - or join cc-zero-intervals, generating the information
-								result = zeroInterval(IntervalElement.joins(bitSize, Arrays.asList(ui.mul(t.range).intersection(ui.mul(t.modRange)))));
+								// same as above...
+								CongruenceClassInterval tmp = bot();
+								for (IntervalElement x : ui.mul(t.range).intersection(ui.mul(t.modRange))) {
+									tmp.join(zeroInterval(x));
+								}
+								result = tmp;
 							} else {
 								// overflow occurs
 								BitNumber m2 = BitNumber.valueOf(m.longValue(), bitSize);

@@ -165,7 +165,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				case AND:
 					assert args.length > 1;
 					for (RTLExpression arg : args) {
-						newState = newState.join(assumeFalse(arg, new GenericValuationState<>(newState)));
+						newState = newState.join(assumeFalse(arg, new GenericValuationState<>(newState, null)));
 					}
 					return newState;
 				case OR:
@@ -260,7 +260,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				case OR:
 					assert args.length > 1;
 					for (RTLExpression arg : args) {
-						newState = newState.join(assumeTrue(arg, new GenericValuationState<>(newState)));
+						newState = newState.join(assumeTrue(arg, new GenericValuationState<>(newState, null)));
 					}
 					return newState;
 				case EQUAL:
@@ -344,19 +344,22 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			@Override
 			public Set<AbstractState> visit(RTLVariableAssignment stmt) {
 				logger.verbose("Found RTLVariableAssignment: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				RTLVariable v = stmt.getLeftHandSide();
 				T rhs = s.abstractEval(stmt.getRightHandSide());
 				MemoryRegion region = newState.getRegion(stmt.getRightHandSide());
 				newState.setVariableValue(v, rhs, region);
 				logger.verbose("Set " + v + " = " + rhs + " and new region " + region);
+				if (v.toString().equals("eax")) {
+					logger.error("Set " + v + " = " + rhs + " and new region " + region + " at " + statement.getLabel());
+				}
 				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLMemoryAssignment stmt) {
 				logger.verbose("Found RTLMemoryAssignment: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				T rhs = s.abstractEval(stmt.getRightHandSide());
 				newState.setMemoryValue(stmt.getLeftHandSide(), rhs);
 				logger.verbose("Set [" + stmt.getLeftHandSide() + "] = " + rhs);
@@ -367,14 +370,14 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			public Set<AbstractState> visit(RTLAssume stmt) {
 				logger.verbose("Found RTLAssume: " + stmt);
 				RTLExpression e = stmt.getAssumption();
-				GenericValuationState<T> newState = assumeTrue(e, new GenericValuationState<>(s));
+				GenericValuationState<T> newState = assumeTrue(e, new GenericValuationState<>(s, statement));
 				return Collections.singleton((AbstractState) newState);
 			}
 
 			@Override
 			public Set<AbstractState> visit(RTLAlloc stmt) {
 				logger.verbose("Found RTLAlloc: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				Writable lhs = stmt.getPointer();
 				MemoryRegion newRegion;
 
@@ -403,7 +406,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			@Override
 			public Set<AbstractState> visit(RTLDealloc stmt) {
 				logger.verbose("Found RTLDealloc: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				T abstractAddress = newState.abstractEval(stmt.getPointer());
 
 				// if the address cannot be determined, set all store memory to TOP
@@ -424,7 +427,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			@Override
 			public Set<AbstractState> visit(RTLUnknownProcedureCall stmt) {
 				logger.warn("Found RTLUnknownProcedureCall: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				for (RTLVariable var : stmt.getDefinedVariables()) {
 					newState.setVariableValue(var, factory.createTop(var.getBitWidth()), newState.getRegion(var));
 				}
@@ -435,7 +438,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			@Override
 			public Set<AbstractState> visit(RTLHavoc stmt) {
 				logger.warn("Found RTLHavoc: " + stmt);
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				RTLVariable var = stmt.getVariable();
 				newState.setVariableValue(var, factory.createTop(var.getBitWidth()), newState.getVariableValue(var).getRight());
 				return Collections.singleton((AbstractState) assumeTrue(ExpressionFactory.createUnsignedLessOrEqual(var, stmt.getMaximum()), newState));
@@ -447,7 +450,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				T value = s.abstractEval(stmt.getValue());
 				T count = s.abstractEval(stmt.getCount());
 				logger.verbose("MemSet(dst: " + stmt.getDestination()+ ", val: " + value + ", count: " + count + ')');
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				if (count.hasUniqueConcretization()) {
 					for (long i = 0L; i < count.getUniqueConcretization().zExtLongValue(); i++) {
 						RTLExpression off = ExpressionFactory.createNumber(i, count.getBitWidth());
@@ -466,7 +469,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				logger.verbose("Found RTLMemcpy: " + stmt);
 				T size = s.abstractEval(stmt.getSize());
 				logger.verbose("RTLMemcpy(src: " + stmt.getSource() + ", dst: " + stmt.getDestination() + ", size: " + size + ')');
-				GenericValuationState<T> newState = new GenericValuationState<>(s);
+				GenericValuationState<T> newState = new GenericValuationState<>(s, statement);
 				if (size.hasUniqueConcretization()) {
 					for (long i = 0L; i < size.getUniqueConcretization().zExtLongValue(); i++) {
 						RTLExpression off = ExpressionFactory.createNumber(i, size.getBitWidth());
@@ -526,12 +529,12 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		}
 		else if(p.getCount() >= threshold.getValue()){
 			logger.debug("Will Widen Now");
-			GenericValuationState<T> result = new GenericValuationState<>(newState);
+			GenericValuationState<T> result = new GenericValuationState<>(newState, null);
 			for (AbstractState state : reached) {
 				result = result.widen((GenericValuationState<T>) state);
 			}
 			logger.debug("Widen result: " + result);
-			return Pair.create((AbstractState) result, (Precision) new IntervalPrecision());
+			return Pair.create((AbstractState) result, precision); // return old precision, so we widen the next time again
 		} else {
 			logger.debug("Incrementing to " + p.inc());
 			return Pair.create(s, (Precision) p.inc());
@@ -544,9 +547,10 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 			Integer numVisited = visitedMap.get(thisLabel);
 			if (numVisited == null) {
 				visitedMap.put(thisLabel, 1);
-			} else if (numVisited > 25) {
+			} else if (numVisited > 10) {
 				visitedMap.clear();
 				loopingLabel = thisLabel;
+				GenericValuationState.TraceNode.showTrace();
 			} else {
 				visitedMap.put(thisLabel, numVisited + 1);
 			}
