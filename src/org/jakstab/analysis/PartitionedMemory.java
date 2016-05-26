@@ -17,17 +17,24 @@
  */
 package org.jakstab.analysis;
 
-import java.io.IOException;
-import java.util.*;
-
 import org.jakstab.Options;
 import org.jakstab.Program;
 import org.jakstab.asm.AbsoluteAddress;
 import org.jakstab.loader.ExecutableImage;
 import org.jakstab.rtl.BitVectorType;
-import org.jakstab.rtl.expressions.*;
-import org.jakstab.util.*;
+import org.jakstab.rtl.expressions.ExpressionFactory;
+import org.jakstab.rtl.expressions.RTLBitRange;
+import org.jakstab.rtl.expressions.RTLNumber;
+import org.jakstab.util.Characters;
+import org.jakstab.util.LazyHashMapMap;
+import org.jakstab.util.Logger;
 import org.jakstab.util.MapMap.EntryIterator;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Map;
 
 /**
  * @author Johannes Kinder
@@ -85,23 +92,23 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 	}
 
 	private static final Logger logger = Logger.getLogger(PartitionedMemory.class);
-	
+
 	private final LazyHashMapMap<MemoryRegion, Long, MemoryCell> store;
 	private boolean dataIsTop;
 	private final AbstractValueFactory<A> valueFactory;
-	
+
 	public PartitionedMemory(AbstractValueFactory<A> valueFactory) {
 		this.valueFactory = valueFactory;
 		store = new LazyHashMapMap<MemoryRegion, Long, MemoryCell>();
 		dataIsTop = false;
 	}
-	
+
 	public PartitionedMemory(PartitionedMemory<A> proto) {
 		valueFactory = proto.valueFactory;
 		dataIsTop = proto.dataIsTop;
 		store = new LazyHashMapMap<MemoryRegion, Long, MemoryCell>(proto.store);
 	}
-	
+
 	public void setTop() {
 		if (Options.ignoreWeakUpdates.getValue()) {
 			logger.info("Ignoring weak universal update!");
@@ -113,7 +120,7 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 		if (Options.debug.getValue())
 			throw new UnknownPointerAccessException("Set all memory regions to TOP!");
 	}
-	
+
 	public void setTop(MemoryRegion region) {
 		if (region == MemoryRegion.TOP) {
 			setTop();
@@ -134,14 +141,14 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 		if (Options.debug.getValue() && region == MemoryRegion.STACK)
 			throw new UnknownPointerAccessException("Set all of stack to TOP!");
 	}
-	
+
 	private void setBytesTop(MemoryRegion region, long offset, int size) {
 		for (int i=0; i<size; i++) {
 			// We need to explicitly remember TOP memory cells in the global region,
 			// as it is initialized to the static data of the executable.
 			// If heap cells are assumed to be initially BOT, we also need to do this.
 			if ((Options.initHeapToBot.getValue() && region != MemoryRegion.STACK) || region == MemoryRegion.GLOBAL) {
-				MemoryCell topCell = new MemoryCell(offset + i, 1, 
+				MemoryCell topCell = new MemoryCell(offset + i, 1,
 						valueFactory.createTop(8));
 				store.put(region, offset + i, topCell);
 			} else {
@@ -149,21 +156,21 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 			}
 		}
 	}
-	
+
 	/**
 	 * Sets a value at an offset in a memory region. If any existing memory
 	 * cells are partially overwritten, sets the memory cell at the original
-	 * offset to TOP. Other copies of the cell at intermediate offsets do 
+	 * offset to TOP. Other copies of the cell at intermediate offsets do
 	 * not need to be overwritten.
-	 * 
+	 *
 	 * A A A A B B[B]B C C C C    <- Write 1-byte X to offset 6
 	 * A A A A T B X B C C C C
 	 *
 	 * A A A A B B B[B C]C C C    <- Write 2 byte X to offset 7
 	 * A A A A T B B X X C C C    <- B is set to top at its original offset
 	 * 							     C is not changed, as its overwritten anyway
-	 * 
-	 * 
+	 *
+	 *
 	 * @param region The memory region to access, cannot be TOP
 	 * @param offset The offset to write to
 	 * @param bitWidth Number of bits of the memory access
@@ -171,11 +178,11 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 	 */
 	public void set(MemoryRegion region, long offset, int bitWidth, A value) {
 		assert region != MemoryRegion.TOP;
-		assert (!(value instanceof BitVectorType) || ((BitVectorType)value).getBitWidth() == bitWidth) : 
+		assert (!(value instanceof BitVectorType) || ((BitVectorType)value).getBitWidth() == bitWidth) :
 			"Memory access bitwidth " + bitWidth + " does not match bitwidth of value to set: " + ((BitVectorType)value).getBitWidth();
 
 		int size = bitWidth / 8;
-		
+
 		// Set all old memory cells in the written area to top
 		for (int i=0; i<size; i++) {
 			MemoryCell oldCell = store.get(region, offset + i);
@@ -184,12 +191,12 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 				setBytesTop(region, oldCell.offset, oldCell.size);
 			}
 		}
-		
-		// If we only wanted to set TOP and we're not in the global region, 
+
+		// If we only wanted to set TOP and we're not in the global region,
 		// we are already done.
 		if (!value.isTop() || region == MemoryRegion.GLOBAL) {
 
-			// Separate update from deletion, so while overwriting an old cell, 
+			// Separate update from deletion, so while overwriting an old cell,
 			// we don't have to be careful not to overwrite our new cell
 			MemoryCell cell = new MemoryCell(offset, size, value);
 			for (int i=0; i<size; i++) {
@@ -197,26 +204,26 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 			}
 		}
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public void weakUpdate(MemoryRegion region, long offset, int bitWidth, A value) {
 		assert region != MemoryRegion.TOP;
 		A oldValue = get(region, offset, bitWidth);
-		
+
 		// If we treat heap cells as initialized to BOT, just set uninitialized cells to the new value
 		if (Options.initHeapToBot.getValue() && oldValue.isTop() && !store.containsKey(region, offset))
 			set(region, offset, bitWidth, value);
 		else
 			set(region, offset, bitWidth, (A)value.join(oldValue));
 	}
-	
+
 	public A get(MemoryRegion region, long offset, int bitWidth) {
 		assert region != MemoryRegion.TOP;
 		int size = bitWidth / 8;
 		MemoryCell cell = store.get(region, offset);
 		if (cell != null) {
 			if (cell.offset != offset || cell.size != size) {
-				
+
 				// ,cell.offset
 				// |   ,offset
 				// |   |   ,cell.offset + cell.size
@@ -226,7 +233,7 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 					int firstBit = (int)((offset - cell.offset) * 8);
 					int lastBit = firstBit + bitWidth - 1;
 					assert firstBit >= 0;
-					
+
 					A parentVal = cell.contents;
 
 					Collection<RTLNumber> cValues = new LinkedList<RTLNumber>();
@@ -235,21 +242,21 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 							cValues = null;
 							break;
 						}
-						
+
 						cValues.add(RTLBitRange.calculate(firstBit, lastBit, cVal));
 					}
 					if (cValues != null) {
 						A e = valueFactory.createAbstractValue(cValues);
-						//logger.debug("Generated abstract value " + e + " for mem" + bitWidth + "[" + region + " + " + offset + 
+						//logger.debug("Generated abstract value " + e + " for mem" + bitWidth + "[" + region + " + " + offset +
 						//		"] from value " + parentVal + " of mem" + (cell.size * 8) + "[" + region + " + " + cell.offset + "]");
 						return e;
 					}
 				} else if (cell.offset == offset && cell.size < size) {
 					// Combine smaller cells to bigger one
-					
+
 					Collection<RTLNumber> lastValues = new LinkedList<RTLNumber>();
 					lastValues.add(ExpressionFactory.createNumber(0, 8));
-					
+
 					Collection<RTLNumber> cValues = null;
 
 					byteIteration: for (int i=0; i<size; i++) {
@@ -260,7 +267,7 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 								cValues = null;
 								break byteIteration;
 							}
-							
+
 							for (RTLNumber last : lastValues) {
 								long val = last.longValue();
 								if (i < size - 1) {
@@ -280,10 +287,10 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 						return e;
 					}
 				}
-					
-					
+
+
 				logger.verbose("Mismatching get with bitwidth " + bitWidth + " on cell at " + region + " + " + offset + " with bitwidth " + cell.size * 8);
-				
+
 				return valueFactory.createTop(bitWidth);
 			}
 			return cell.contents;
@@ -300,20 +307,20 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 					mValue = module.readMemoryLocation(
 							ExpressionFactory.createMemoryLocation(
 									ExpressionFactory.createNumber(offset), bitWidth));
-					// Memory outside the program area is implicitly initialized to top 
-					if (mValue != null) 
+					// Memory outside the program area is implicitly initialized to top
+					if (mValue != null)
 						return valueFactory.createAbstractValue(mValue);
 				} catch (IOException e) {
 					// Fall through and return TOP
 				}
-			} 
-		}		
+			}
+		}
 		return valueFactory.createTop(bitWidth);
 	}
-	
-	public void memcpy(MemoryRegion srcRegion, long srcOffset, 
+
+	public void memcpy(MemoryRegion srcRegion, long srcOffset,
 			MemoryRegion dstRegion, long dstOffset, long size) {
-		
+
 		for (long i=0; i<size;) {
 			long dstPtr = dstOffset + i;
 			MemoryCell v = store.get(srcRegion, dstPtr);
@@ -326,19 +333,19 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 			}
 		}
 	}
-			
 
-	
+
+
 	/**
 	 * Removes all elements from the stack below the passed stack offset.
-	 * 
-	 * @param offset the stack offset below which all entries should be cleared 
+	 *
+	 * @param offset the stack offset below which all entries should be cleared
 	 */
 	public void forgetStackBelow(long offset) {
 		Map<Long, MemoryCell> stack = store.getSubMap(MemoryRegion.STACK);
 		if (stack == null)
 			return;
-		
+
 		//stack.headMap(offset).clear();
 //		for (Iterator<Long> it = stack.keySet().iterator(); it.hasNext();)
 		for (Iterator<Map.Entry<Long, MemoryCell>> it = store.subMapIterator(MemoryRegion.STACK); it.hasNext();)
@@ -346,14 +353,14 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 				it.remove();
 			}
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public PartitionedMemory<A> join(LatticeElement l) {
 		PartitionedMemory<A> other = (PartitionedMemory<A>)l;
 		PartitionedMemory<A> result = new PartitionedMemory<A>(valueFactory);
 
-		// Join memory valuations. For the global region, we need to do both directions, 
+		// Join memory valuations. For the global region, we need to do both directions,
 		// because constant image data is not present in store, but only visible
 		// through calls to get().
 		if (store.containsLeftKey(MemoryRegion.GLOBAL)) {
@@ -362,7 +369,7 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 				if (offset != entry.getValue().offset) continue;
 				int bitWidth = entry.getValue().size * 8;
 				A value = entry.getValue().contents;
-				result.set(MemoryRegion.GLOBAL, offset, bitWidth, 
+				result.set(MemoryRegion.GLOBAL, offset, bitWidth,
 						(A)value.join(other.get(MemoryRegion.GLOBAL, offset, bitWidth)));
 			}
 		}
@@ -373,17 +380,17 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 			MemoryRegion region = entryIt.getLeftKey();
 			int bitWidth = entryIt.getValue().size * 8;
 			A value = entryIt.getValue().contents;
-			result.set(region, offset, bitWidth, 
+			result.set(region, offset, bitWidth,
 					(A)value.join(this.get(region, offset, bitWidth)));
-			
+
 		}
-		
+
 		// If image data is TOP in at least one state, it will be in the joined state
 		result.dataIsTop = other.dataIsTop || dataIsTop;
 
 		return result;
 	}
-	
+
 	@Override
 	public boolean isBot() {
 		return false;
@@ -397,10 +404,14 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 	@SuppressWarnings("unchecked")
 	@Override
 	public boolean lessOrEqual(LatticeElement l) {
-		// Check for every element in "other" if its value in "this" is less or equal 
-		// than the value in "other". The elements not stored in the valuation maps 
+		// Check for every element in "other" if its value in "this" is less or equal
+		// than the value in "other". The elements not stored in the valuation maps
 		// of "other" (except for static data) are implicitly TOP and thus every value is less or equal to them.
 		PartitionedMemory<A> other = (PartitionedMemory<A>)l;
+
+		if (isTop() && !other.isTop()) {
+			return false;
+		}
 
 		for (EntryIterator<MemoryRegion, Long, MemoryCell> entryIt = other.store.entryIterator(); entryIt.hasEntry(); entryIt.next()) {
 			long offset = entryIt.getRightKey();
@@ -411,19 +422,19 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 			if (!get(region, offset, bitWidth).lessOrEqual(value))
 				return false;
 		}
-		
+
 		// Once static data is modified, the new value is present in the store maps. Thus
 		// we can assume that all static values not present in both states are equal.
-		// At this point, the only way "this" could not be less or equal than "other" is if 
+		// At this point, the only way "this" could not be less or equal than "other" is if
 		// "this"'s store map contains a value in the static data address range that is not
-		// yet present in "other"'s store map (and thus would have been missed by the 
+		// yet present in "other"'s store map (and thus would have been missed by the
 		// iteration above.
-		
-		// Now, check for every element in "this"'s global region (includes the static data 
-		// range) whether its value is less or equal than the value of that element in 
-		// "other". If one isn't less or equal, this means that element is still not in 
-		// other's store map and has a non-initial value in this's store map (TOP or just 
-		// another value).		
+
+		// Now, check for every element in "this"'s global region (includes the static data
+		// range) whether its value is less or equal than the value of that element in
+		// "other". If one isn't less or equal, this means that element is still not in
+		// other's store map and has a non-initial value in this's store map (TOP or just
+		// another value).
 		if (store.containsLeftKey(MemoryRegion.GLOBAL)) {
 			for (Map.Entry<Long, MemoryCell> entry : store.getSubMap(MemoryRegion.GLOBAL).entrySet()) {
 				long offset = entry.getKey();
@@ -467,23 +478,23 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 
 	@Override
 	public boolean equals(Object obj) {
-		if (obj == null) 
+		if (obj == null)
 			return false;
-		if (this == obj) 
+		if (this == obj)
 			return true;
-		PartitionedMemory<?> other = (PartitionedMemory<?>) obj;		
-		return dataIsTop == other.dataIsTop && store.equals(other.store); 
+		PartitionedMemory<?> other = (PartitionedMemory<?>) obj;
+		return dataIsTop == other.dataIsTop && store.equals(other.store);
 	}
-	
+
 	public EntryIterator<MemoryRegion, Long, A> entryIterator() {
 		return new MemoryIterator();
 	}
-	
+
 	private class MemoryIterator implements EntryIterator<MemoryRegion, Long, A> {
 
-		private EntryIterator<MemoryRegion, Long, MemoryCell> storeIt = 
+		private EntryIterator<MemoryRegion, Long, MemoryCell> storeIt =
 			store.entryIterator();
-		
+
 		@Override
 		public MemoryRegion getLeftKey() {
 			return storeIt.getLeftKey();

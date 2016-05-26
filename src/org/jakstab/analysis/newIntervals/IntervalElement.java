@@ -2020,7 +2020,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 				result = interval(t.minBits, maxBits).join(
 						interval(minBits.mul(two).sub(maxBits).dec(), maxBits));
 			} else if (t.hasElement(minBits) && t.hasElement(maxBits)) {
-				result = t.join(interval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).inc()));
+				result = t.join(interval(t.minBits, t.minBits.add(maxBits.mul(two)).sub(minBits.mul(two)).inc())).join(this);
 			} else {
 				result = top();
 			}

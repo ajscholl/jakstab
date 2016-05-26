@@ -622,12 +622,47 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		}
 	}
 
+	/**
+	 * Similar to cutting intervals, we cut a cc-interval at the north and at the south pole. However, if congruence
+	 * information was available, we have to add it again.
+	 *
+	 * @return A list of cc-intervals neither overlapping the north nor the south pole.
+	 */
+	private CongruenceClassInterval[] cut() {
+		Set<IntervalElement> r = getRange().cut();
+		CongruenceClassInterval[] result = new CongruenceClassInterval[r.size()];
+		if (kind == CCIntervalKind.MOD) {
+			int i = 0;
+			for (IntervalElement u : r) {
+				result[i] = modInterval(u, modRange, modulus);
+				i++;
+			}
+		} else {
+			int i = 0;
+			for (IntervalElement u : r) {
+				result[i] = zeroInterval(u);
+				i++;
+			}
+		}
+		return result;
+	}
+
 	@Override
 	public AbstractDomain<CongruenceClassInterval> mulDouble(CongruenceClassInterval t) {
 		assertCompatible(t);
-		// TODO if both intervals are below 64 bits, we can actually do more here as overflow can not happen
-		// but keep in mind that at least shl also calls mulHelper.
-		return extentBitSize().mulHelper(t.extentBitSize());
+		List<CongruenceClassInterval> resultSet = new ArrayList<>();
+		// as Jakstab extends the bitsize during multiplication, we can try to exploit this here:
+		// first cut both intervals, similar to interval multiplication
+		// then multiply extended fragments, hoping for a small result
+		for (CongruenceClassInterval u : cut()) {
+			for (CongruenceClassInterval v : t.cut()) {
+				// it is crucial that we onlu extend here, otherwise we extend before we cut, including many fake numbers
+				resultSet.add(u.extentBitSize().mulHelper(v.extentBitSize()));
+			}
+		}
+		// join here. even if we do not carry congruence information in each part, we may be able to infer new one here,
+		// for example if the set consists of only two elements
+		return joinsCC(Math.min(bitSize * 2, 64), resultSet);
 	}
 
 	/**
