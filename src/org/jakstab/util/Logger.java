@@ -33,7 +33,7 @@ public class Logger {
 	private static final JOption<Boolean> recordLog = JOption.create("record-log", "b", false, "Record the log and output the last 5000 elements on error or program failure");
 
 	private static String globalPrefix = "";
-	private static boolean showClass = true;
+	private static boolean showClass = false;
 
 	private static String[] log = new String[5000];
 	private static int logNext = 0;

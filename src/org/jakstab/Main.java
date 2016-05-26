@@ -397,7 +397,7 @@ public class Main {
 				logger.info("Found " + procedures.size() + " function entry points from procedure analysis.");
 
 				if (!Options.noGraphs.getValue())
-					graphWriter.writeCallGraph(baseFileName + "_callgraph", callGraph);
+					graphWriter.writeCallGraph(baseFileName + "_callgraph", callGraph, program.getCFG());
 			}
 
 
