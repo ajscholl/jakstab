@@ -54,11 +54,9 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		}
 		IntervalPrecision p = (IntervalPrecision) precision;
 		if (p.getCount() >= threshold.getValue()) {
-			GenericValuationState<T> result = ((GenericValuationState<T>) s1).widen((GenericValuationState<T>) s2);
-			result.activateWiden();
-			return result;
+			return ((GenericValuationState<T>) s2).widen((GenericValuationState<T>) s1);
 		} else {
-			return CPAOperators.mergeJoin(s1, s2, precision);
+			return CPAOperators.mergeJoin(s2, s1, precision);
 		}
 	}
 
@@ -382,6 +380,7 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				if (stmt.getAllocationName() != null) {
 					newRegion = MemoryRegion.create(stmt.getAllocationName());
 				} else {
+					//noinspection StringConcatenationMissingWhitespace
 					newRegion = MemoryRegion.create("alloc" + stmt.getLabel() + '#' + newState.countAllocation(stmt.getLabel()));
 				}
 				logger.verbose("Allocated region " + newRegion);
