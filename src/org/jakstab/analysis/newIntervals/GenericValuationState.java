@@ -307,7 +307,7 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 	@SuppressWarnings("unchecked")
 	public boolean lessOrEqual(LatticeElement l) {
 		GenericValuationState<T> other = (GenericValuationState<T>) l;
-		// just compare the inner elements, do not use isTop/isBot, it is not necessary
+		// just compare the inner elements, do not use isTop/isBot, they are broken for stores with respect to <=
 		boolean vr = varVal.lessOrEqual(other.varVal);
 		boolean sr = store.lessOrEqual(other.store);
 		boolean rr = varRegions.lessOrEqual(other.varRegions);
@@ -316,11 +316,12 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		logger.debug(store + " <= " + other.store + " = " + sr);
 		logger.debug(varRegions + " <= " + other.varRegions + " = " + rr);
 		logger.debug(this + " <= " + other + " = " + result);
-		if (isBot() || other.isTop()) {
-			assert result;
-		} else if (isTop() || other.isBot()) {
-			assert !result;
-		}
+		// see note in partitioned memory
+//		if (isBot() || other.isTop()) {
+//			assert result;
+//		} else if (isTop() || other.isBot()) {
+//			assert !result;
+//		}
 		return result;
 	}
 
