@@ -409,9 +409,11 @@ public final class PartitionedMemory<A extends AbstractValue> implements Lattice
 		// of "other" (except for static data) are implicitly TOP and thus every value is less or equal to them.
 		PartitionedMemory<A> other = (PartitionedMemory<A>)l;
 
-		if (isTop() && !other.isTop()) {
-			return false;
-		}
+		// talk with SCM about this: it should certainly be valid code, but (Kinders) intervals degrade for helloC with this
+		// it also makes analyses a lot faster and use a lot less states, so maybe this is worthwhile?
+//		if (isTop() && !other.isTop()) {
+//			return false;
+//		}
 
 		for (EntryIterator<MemoryRegion, Long, MemoryCell> entryIt = other.store.entryIterator(); entryIt.hasEntry(); entryIt.next()) {
 			long offset = entryIt.getRightKey();
