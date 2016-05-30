@@ -1,12 +1,12 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
 import org.jakstab.JOption;
 import org.jakstab.Options;
 import org.jakstab.analysis.*;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractDomain;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractDomainFactory;
-import org.jakstab.analysis.newIntervals.abstracted.Boxable;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractDomain;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractDomainFactory;
+import org.jakstab.analysis.signagnostic.abstracted.Boxable;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.cfa.CFAEdge;
 import org.jakstab.cfa.Location;
 import org.jakstab.cfa.StateTransformer;

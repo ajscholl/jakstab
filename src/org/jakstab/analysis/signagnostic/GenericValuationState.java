@@ -1,9 +1,9 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
 import org.jakstab.Options;
 import org.jakstab.analysis.*;
-import org.jakstab.analysis.newIntervals.abstracted.*;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.abstracted.*;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.cfa.Location;
 import org.jakstab.rtl.expressions.RTLExpression;
 import org.jakstab.rtl.expressions.RTLMemoryLocation;

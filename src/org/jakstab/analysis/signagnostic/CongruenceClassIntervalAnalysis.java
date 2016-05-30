@@ -1,15 +1,15 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
 import org.jakstab.AnalysisProperties;
 import org.jakstab.analysis.MemoryRegion;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractDomain;
-import org.jakstab.analysis.newIntervals.statistic.Statistic;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractDomain;
+import org.jakstab.analysis.signagnostic.statistic.Statistic;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.rtl.expressions.RTLVariable;
 import org.jakstab.util.Logger;
 import org.jakstab.util.Pair;
 
-import static org.jakstab.analysis.newIntervals.CongruenceClassInterval.zeroInterval;
+import static org.jakstab.analysis.signagnostic.CongruenceClassInterval.zeroInterval;
 
 /**
  * Implementation for the analysis for cc-intervals.

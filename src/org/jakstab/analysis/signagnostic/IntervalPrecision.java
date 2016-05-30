@@ -1,4 +1,4 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
 import org.jakstab.analysis.Precision;
 import org.jakstab.util.Logger;

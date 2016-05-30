@@ -1,4 +1,4 @@
-package org.jakstab.analysis.newIntervals.abstracted;
+package org.jakstab.analysis.signagnostic.abstracted;
 
 /**
  * Interface for things which can be boxed into an abstract domain.

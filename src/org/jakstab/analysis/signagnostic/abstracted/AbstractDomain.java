@@ -1,9 +1,9 @@
-package org.jakstab.analysis.newIntervals.abstracted;
+package org.jakstab.analysis.signagnostic.abstracted;
 
 import org.jakstab.analysis.AbstractState;
 import org.jakstab.analysis.AbstractValue;
 import org.jakstab.analysis.LatticeElement;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.rtl.BitVectorType;
 import org.jakstab.rtl.expressions.RTLNumber;
 import org.jakstab.util.Pair;

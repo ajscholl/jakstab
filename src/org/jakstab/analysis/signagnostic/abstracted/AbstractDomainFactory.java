@@ -1,4 +1,4 @@
-package org.jakstab.analysis.newIntervals.abstracted;
+package org.jakstab.analysis.signagnostic.abstracted;
 
 import org.jakstab.analysis.AbstractValue;
 import org.jakstab.analysis.AbstractValueFactory;

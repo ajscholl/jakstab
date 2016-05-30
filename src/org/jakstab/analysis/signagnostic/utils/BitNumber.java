@@ -1,6 +1,6 @@
-package org.jakstab.analysis.newIntervals.utils;
+package org.jakstab.analysis.signagnostic.utils;
 
-import org.jakstab.analysis.newIntervals.statistic.Statistic;
+import org.jakstab.analysis.signagnostic.statistic.Statistic;
 import org.jakstab.rtl.BitVectorType;
 import org.jakstab.rtl.expressions.RTLNumber;
 import org.jakstab.util.Optional;

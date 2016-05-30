@@ -1,13 +1,13 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
 import org.jakstab.JOption;
 import org.jakstab.Options;
 import org.jakstab.analysis.LatticeElement;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractDomain;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractEvaluator;
-import org.jakstab.analysis.newIntervals.abstracted.Boxable;
-import org.jakstab.analysis.newIntervals.statistic.Statistic;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractDomain;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractEvaluator;
+import org.jakstab.analysis.signagnostic.abstracted.Boxable;
+import org.jakstab.analysis.signagnostic.statistic.Statistic;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.cfa.Location;
 import org.jakstab.rtl.expressions.ExpressionFactory;
 import org.jakstab.rtl.expressions.RTLExpression;
@@ -18,7 +18,7 @@ import java.lang.ref.WeakReference;
 import java.math.BigInteger;
 import java.util.*;
 
-import static org.jakstab.analysis.newIntervals.utils.BitNumber.bit;
+import static org.jakstab.analysis.signagnostic.utils.BitNumber.bit;
 import static org.jakstab.rtl.expressions.RTLBitRange.bitMask;
 
 /**

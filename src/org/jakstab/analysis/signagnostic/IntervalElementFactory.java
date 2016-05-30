@@ -1,8 +1,8 @@
-package org.jakstab.analysis.newIntervals;
+package org.jakstab.analysis.signagnostic;
 
-import org.jakstab.analysis.newIntervals.abstracted.AbstractDomainFactory;
-import org.jakstab.analysis.newIntervals.abstracted.AbstractEvaluator;
-import org.jakstab.analysis.newIntervals.utils.BitNumber;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractDomainFactory;
+import org.jakstab.analysis.signagnostic.abstracted.AbstractEvaluator;
+import org.jakstab.analysis.signagnostic.utils.BitNumber;
 import org.jakstab.rtl.expressions.RTLExpression;
 import org.jakstab.rtl.expressions.RTLNumber;
 import org.jakstab.util.Logger;
