@@ -21,6 +21,17 @@ import java.util.*;
 import static org.jakstab.analysis.newIntervals.utils.BitNumber.bit;
 import static org.jakstab.rtl.expressions.RTLBitRange.bitMask;
 
+/**
+ * Signedness-agnostic interval implementation. Based on the paper
+ * "Interval Analysis and Machine Arithmetic: Why Signedness Ignorance Is Bliss"
+ * by
+ * GRAEME GANGE, JORGE A. NAVAS, PETER SCHACHTE, HARALD SØNDERGAARD, and PETER J. STUCKEY.
+ *
+ * Several modifications were performed by A. J. Scholl, described in his bachelor thesis
+ * "A Signedness-Agnostic Interval Domain with Congruences and an Implementation for Jakstab"
+ *
+ * @author A. J. Scholl
+ */
 final class IntervalElement implements Comparable<IntervalElement>, AbstractDomain<IntervalElement>, Boxable<IntervalElement> {
 
 	/**
@@ -2067,6 +2078,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		}
 	}
 
+	@Override
 	public Pair<IntervalElement, IntervalElement> assumeULeq(IntervalElement t) {
 		assertCompatible(t);
 		final IntervalElement newS;
@@ -2092,6 +2104,7 @@ final class IntervalElement implements Comparable<IntervalElement>, AbstractDoma
 		return result;
 	}
 
+	@Override
 	public Pair<IntervalElement, IntervalElement> assumeSLeq(IntervalElement t) {
 		assertCompatible(t);
 		final IntervalElement newS;

@@ -11,22 +11,32 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
-public class VariableRegion implements LatticeElement, Iterable<Entry<RTLVariable, MemoryRegion>> {
+/**
+ * Value valuation specialized to memory regions. Code copied and adapted from {@link org.jakstab.analysis.VariableValuation},
+ * originally written by Johannes Kinder.
+ *
+ * @author A. J. Scholl
+ */
+class VariableRegion implements LatticeElement, Iterable<Entry<RTLVariable, MemoryRegion>> {
 
+	/**
+	 * Logger.
+	 */
+	@SuppressWarnings("unused")
 	private static final Logger logger = Logger.getLogger(VariableRegion.class);
 
 	private final Map<RTLVariable, MemoryRegion> regions;
 
-	protected VariableRegion(Map<RTLVariable, MemoryRegion> regions) {
+	private VariableRegion(Map<RTLVariable, MemoryRegion> regions) {
 		assert regions != null;
 		this.regions = regions;
 	}
 
-	public VariableRegion(VariableRegion proto) {
+	VariableRegion(VariableRegion proto) {
 		this(new TreeMap<>(proto.regions));
 	}
 
-	public VariableRegion() {
+	VariableRegion() {
 		this(new TreeMap<RTLVariable, MemoryRegion>());
 	}
 

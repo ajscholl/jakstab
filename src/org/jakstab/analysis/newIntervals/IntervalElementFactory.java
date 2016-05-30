@@ -13,16 +13,35 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Factory for intervals.
+ *
+ * @author A. J. Scholl
+ */
 final class IntervalElementFactory implements AbstractDomainFactory<IntervalElement> {
 
+	/**
+	 * Logger.
+	 */
 	@SuppressWarnings("unused")
 	private static final Logger logger = Logger.getLogger(IntervalElementFactory.class);
 
+	/**
+	 * Shared factory object.
+	 */
 	private static final IntervalElementFactory factory = new IntervalElementFactory();
 
+	/**
+	 * Empty constructor.
+	 */
 	private IntervalElementFactory() {
 	}
 
+	/**
+	 * Retrieve the factory.
+	 *
+	 * @return The factory.
+	 */
 	public static IntervalElementFactory getFactory() {
 		return factory;
 	}

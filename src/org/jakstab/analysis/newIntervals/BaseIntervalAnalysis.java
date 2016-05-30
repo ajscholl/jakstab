@@ -9,7 +9,6 @@ import org.jakstab.analysis.newIntervals.abstracted.Boxable;
 import org.jakstab.analysis.newIntervals.utils.BitNumber;
 import org.jakstab.cfa.CFAEdge;
 import org.jakstab.cfa.Location;
-import org.jakstab.cfa.RTLLabel;
 import org.jakstab.cfa.StateTransformer;
 import org.jakstab.rtl.expressions.*;
 import org.jakstab.rtl.statements.*;
@@ -17,20 +16,39 @@ import org.jakstab.util.Lattices;
 import org.jakstab.util.Logger;
 import org.jakstab.util.Pair;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
-@SuppressWarnings("Unused")
+/**
+ * Basic interval analysis class providing almost all required functionality.
+ *
+ * @author A. J. Scholl
+ * @param <T> The domain of the analysis.
+ */
 abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & AbstractDomain<T>> implements ConfigurableProgramAnalysis {
 
+	/**
+	 * Number of iterations until we perform widening.
+	 */
 	public static JOption<Integer> threshold = JOption.create("interval-widen-threshold", "k", 5, "Sets the threshold used in merge and prec for cc-intervals. After this threshold, the analysis will widen.");
 
+	/**
+	 * Logger.
+	 */
 	private static final Logger logger = Logger.getLogger(BaseIntervalAnalysis.class);
 
+	/**
+	 * Factory to create elements of the domain.
+	 */
 	private final AbstractDomainFactory<T> factory;
 
-	private final Map<RTLLabel, Integer> visitedMap = new HashMap<>();
-	private RTLLabel loopingLabel = null;
-
+	/**
+	 * Construct a new analysis.
+	 *
+	 * @param factory The factory to use.
+	 */
 	BaseIntervalAnalysis(AbstractDomainFactory<T> factory) {
 		this.factory = factory;
 	}
@@ -66,8 +84,25 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		return abstractPost((RTLStatement) cfaEdge.getTransformer(), (GenericValuationState<T>) state);
 	}
 
+	/**
+	 * Handle the assumption that var has a different value than newInt, which has the unique concretization val.
+	 *
+	 * @param var The variable.
+	 * @param newInt The impossible valuation.
+	 * @param val The unique value of newInt.
+	 * @param newState The state to modify.
+	 * @return The resulting state.
+	 */
 	abstract GenericValuationState<T> assumeNeqVar(RTLVariable var, T newInt, BitNumber val, GenericValuationState<T> newState);
 
+	/**
+	 * Assume that arg has a different valuation than newInt.
+	 *
+	 * @param arg The expression different from newInt.
+	 * @param newInt A valuation different from arg.
+	 * @param newState The state to modify.
+	 * @return The resulting state.
+	 */
 	private GenericValuationState<T> assumeNeq(RTLExpression arg, T newInt, GenericValuationState<T> newState) {
 		if (arg instanceof RTLVariable) {
 			if (newInt.hasUniqueConcretization()) {
@@ -98,6 +133,14 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		return newState;
 	}
 
+	/**
+	 * Assume that arg has the valuation than newInt.
+	 *
+	 * @param arg The expression with valuation newInt.
+	 * @param newInt The valuation for arg.
+	 * @param newState The state to modify.
+	 * @return The resulting state.
+	 */
 	private GenericValuationState<T> assumeEq(RTLExpression arg, T newInt, GenericValuationState<T> newState) {
 		if (arg instanceof RTLVariable) {
 			RTLVariable var = (RTLVariable) arg;
@@ -143,6 +186,13 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		return newState;
 	}
 
+	/**
+	 * Assume an expression evaluates to false.
+	 *
+	 * @param e The expression.
+	 * @param newState The state to modify.
+	 * @return The resulting state.
+	 */
 	private GenericValuationState<T> assumeFalse(RTLExpression e, GenericValuationState<T> newState) {
 		T assumeVal = newState.abstractEval(e);
 		logger.debug("Assuming " + e + " not to hold");
@@ -230,6 +280,13 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		}
 	}
 
+	/**
+	 * Assume an expression evaluates to true,
+	 *
+	 * @param e The expression.
+	 * @param newState The state to modify.
+	 * @return The resulting state.
+	 */
 	private GenericValuationState<T> assumeTrue(RTLExpression e, GenericValuationState<T> newState) {
 		T assumeVal = newState.abstractEval(e);
 		logger.debug("Assuming " + e + " to hold");
@@ -333,10 +390,15 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		}
 	}
 
+	/**
+	 * Handle a statement in some state.
+	 *
+	 * @param statement The statement.
+	 * @param s The state to handle the statement in.
+	 * @return A set of possible new states.
+	 */
 	private Set<AbstractState> abstractPost(final RTLStatement statement, final GenericValuationState<T> s) {
 		logger.info("start processing abstractPost(" + statement + ") " + statement.getLabel());
-		countPost(statement, s);
-
 		Set<AbstractState> res = statement.accept(new DefaultStatementVisitor<Set<AbstractState>>() {
 
 			@Override
@@ -537,24 +599,6 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 		}
 	}
 
-	private void countPost(RTLStatement statement, GenericValuationState<T> s) {
-		RTLLabel thisLabel = statement.getLabel();
-		if (loopingLabel == null) {
-			Integer numVisited = visitedMap.get(thisLabel);
-			if (numVisited == null) {
-				visitedMap.put(thisLabel, 1);
-			} else if (numVisited > 10) {
-				visitedMap.clear();
-				loopingLabel = thisLabel;
-			} else {
-				visitedMap.put(thisLabel, numVisited + 1);
-			}
-		}
-		if (thisLabel.equals(loopingLabel)) {
-			logger.warn("Potential loop at " + thisLabel + " with state " + s);
-		}
-	}
-
 	@Override
 	public boolean stop(AbstractState s, ReachedSet reached, Precision precision) {
 		boolean stop = CPAOperators.stopJoin(s, reached, precision);
@@ -564,9 +608,6 @@ abstract class BaseIntervalAnalysis<T extends Boxable<T> & AbstractValue & Abstr
 				"\t\nand joinAll = " + Lattices.joinAll(reached) +
 				"\t\nand precision " + precision +
 				"\t\nresult = " + stop);
-		if (!stop && loopingLabel != null) {
-			logger.warn("Not stopping join in " + s + " with reached set " + reached);
-		}
 		return stop;
 	}
 }

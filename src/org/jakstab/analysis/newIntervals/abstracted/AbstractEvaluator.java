@@ -8,14 +8,35 @@ import org.jakstab.util.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Evaluator for a domain. Reduces code duplication.
+ *
+ * @author A. J. Scholl
+ * @param <T> Value to evaluate to.
+ */
 public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 
+	/**
+	 * Logger.
+	 */
 	private static final Logger logger = Logger.getLogger(AbstractEvaluator.class);
 
+	/**
+	 * Factory to create new values, join existing values, etc.
+	 */
 	private final AbstractDomainFactory<T> factory;
 
+	/**
+	 * State to evaluate variables and memory locations with.
+	 */
 	private final AbstractValuationState<T> s;
 
+	/**
+	 * Create a new evaluator with the given factory and state.
+	 *
+	 * @param factory A factory to create new values.
+	 * @param s A state to look up existing values. The state should not be modified.
+	 */
 	public AbstractEvaluator(AbstractDomainFactory<T> factory, AbstractValuationState<T> s) {
 		assert factory != null;
 		assert s != null;
@@ -23,6 +44,12 @@ public final class AbstractEvaluator<T extends AbstractValue & Boxable<T>> {
 		this.s = s;
 	}
 
+	/**
+	 * Evaluate an expression in the context of the state saved in the evaluator.
+	 *
+	 * @param e The expression to evaluate.
+	 * @return A value describing the expression.
+	 */
 	public AbstractDomain<T> evalExpression(RTLExpression e) {
 		logger.verbose("Evaluating " + e);
 		final int bitSize = e.getBitWidth();

@@ -11,8 +11,18 @@ import org.jakstab.util.Pair;
 
 import static org.jakstab.analysis.newIntervals.IntervalElement.interval;
 
+/**
+ * Implementation for the analysis for intervals.
+ *
+ * @author A. J. Scholl
+ */
 public class IntervalAnalysis extends BaseIntervalAnalysis<IntervalElement> {
 
+	/**
+	 * Called by reflection code inside Jakstab. Registers this analysis.
+	 *
+	 * @param p The properties to register with.
+	 */
     public static void register(AnalysisProperties p) {
         p.setShortHand('j');
         p.setName("Signedness Agnostic Interval analysis");
@@ -20,13 +30,20 @@ public class IntervalAnalysis extends BaseIntervalAnalysis<IntervalElement> {
         p.setExplicit(true);
     }
 
+	/**
+	 * Logger.
+	 */
     private static final Logger logger = Logger.getLogger(IntervalAnalysis.class);
 
+	/**
+	 * Create a new analysis with the correct factory.
+	 */
     public IntervalAnalysis() {
 		super(IntervalElementFactory.getFactory());
 		Statistic.activateStatistic();
     }
 
+	@Override
 	GenericValuationState<IntervalElement> assumeNeqVar(RTLVariable var, IntervalElement newInt, BitNumber val, GenericValuationState<IntervalElement> newState) {
 		Pair<AbstractDomain<IntervalElement>, MemoryRegion> oldVal = newState.getVariableValue(var);
 		IntervalElement oldInt = oldVal.getLeft().abstractGet();

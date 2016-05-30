@@ -14,16 +14,35 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Factory for cc-intervals.
+ *
+ * @author A. J. Scholl
+ */
 final class CongruenceClassIntervalFactory implements AbstractDomainFactory<CongruenceClassInterval> {
 
+	/**
+	 * Logger.
+	 */
 	@SuppressWarnings("unused")
 	private static final Logger logger = Logger.getLogger(CongruenceClassIntervalFactory.class);
 
+	/**
+	 * Shared factory object.
+	 */
 	private static final CongruenceClassIntervalFactory factory = new CongruenceClassIntervalFactory();
 
+	/**
+	 * Empty constructor.
+	 */
 	private CongruenceClassIntervalFactory() {
 	}
 
+	/**
+	 * Retrieve the factory.
+	 *
+	 * @return The factory.
+	 */
 	public static CongruenceClassIntervalFactory getFactory() {
 		return factory;
 	}

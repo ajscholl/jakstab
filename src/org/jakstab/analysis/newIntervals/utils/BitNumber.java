@@ -13,6 +13,8 @@ import java.util.WeakHashMap;
 /**
  * Integer type with variable bit width between 1 and 64. Compares using unsigned interpretation of the bit patterns, but
  * operations to operate on signed interpretations of the bit patterns exist, too.
+ *
+ * @author A. J. Scholl
  */
 public class BitNumber implements Comparable<BitNumber>, BitVectorType {
 

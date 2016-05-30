@@ -11,8 +11,18 @@ import org.jakstab.util.Pair;
 
 import static org.jakstab.analysis.newIntervals.CongruenceClassInterval.zeroInterval;
 
+/**
+ * Implementation for the analysis for cc-intervals.
+ *
+ * @author A. J. Scholl
+ */
 public class CongruenceClassIntervalAnalysis extends BaseIntervalAnalysis<CongruenceClassInterval> {
 
+	/**
+	 * Called by reflection code inside Jakstab. Registers this analysis.
+	 *
+	 * @param p The properties to register with.
+	 */
     public static void register(AnalysisProperties p) {
         p.setShortHand('m');
         p.setName("Signedness Agnostic Interval Analysis with Congruence Classes");
@@ -20,13 +30,20 @@ public class CongruenceClassIntervalAnalysis extends BaseIntervalAnalysis<Congru
         p.setExplicit(true);
     }
 
+	/**
+	 * Logger.
+	 */
     private static final Logger logger = Logger.getLogger(CongruenceClassIntervalAnalysis.class);
 
+	/**
+	 * Create a new analysis with the correct factory.
+	 */
     public CongruenceClassIntervalAnalysis() {
 		super(CongruenceClassIntervalFactory.getFactory());
 		Statistic.activateStatistic();
     }
 
+	@Override
 	GenericValuationState<CongruenceClassInterval> assumeNeqVar(RTLVariable var, CongruenceClassInterval newInt, BitNumber val, GenericValuationState<CongruenceClassInterval> newState) {
 		Pair<AbstractDomain<CongruenceClassInterval>, MemoryRegion> oldVal = newState.getVariableValue(var);
 		CongruenceClassInterval oldInt = oldVal.getLeft().abstractGet();

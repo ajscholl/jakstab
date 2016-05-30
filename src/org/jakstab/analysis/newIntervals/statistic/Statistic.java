@@ -2,18 +2,16 @@ package org.jakstab.analysis.newIntervals.statistic;
 
 import org.jakstab.util.Logger;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
+/**
+ * Utility class to record statistic information for intervals.
+ *
+ * @author A. J. Scholl
+ */
 public class Statistic {
 
 	private static final Logger logger = Logger.getLogger(Statistic.class);
 
 	private static boolean hasNoStatistic = true;
-
-	private static final MemoryWatcher watcher = new MemoryWatcher();
-	private static final Thread watcherThread = new Thread(watcher);
 
 	private static long bitNumberReuseCount = 0L;
 	private static long bitNumberUseCount = 0L;
@@ -27,105 +25,14 @@ public class Statistic {
 	private static long ccIntervalElementUseCount = 0L;
 	private static long ccIntervalElementCreateCount = 0L;
 
-	private static class MemoryWatcher implements Runnable {
-		private final List<Long> usedMemory = new ArrayList<>();
-		private boolean keepGoing = true;
-
-		@Override
-		public void run() {
-			while (keepGoing) {
-				try {
-					Thread.sleep(10L);
-					Runtime.getRuntime().gc();
-					usedMemory.add(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
-				} catch (InterruptedException ignore) {
-					keepGoing = false;
-				}
-			}
-		}
-
-		List<Long> getUsedMemory() {
-			while (keepGoing) {
-				try {
-					Thread.sleep(10L);
-				} catch (InterruptedException ignore) {
-					// ignore exception
-				}
-			}
-			return usedMemory;
-		}
-	}
-
 	static {
-		//watcherThread.start();
-
 		// register a hook to print the generated statistic.
 		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
 			@Override
 			public void run() {
-				//watcherThread.interrupt();
-				//List<Long> usedMemory = watcher.getUsedMemory();
-				//printMemoryStatistic(usedMemory);
 				printStatistic();
 			}
 		}));
-	}
-
-	/**
-	 * Print a summary of the used memory.
-	 *
-	 * @param usedMemory The used memory in bytes.
-	 */
-	private static void printMemoryStatistic(List<Long> usedMemory) {
-		if (usedMemory.isEmpty()) {
-			return;
-		}
-		long maxUsed = Collections.max(usedMemory);
-		logger.info("Sampled " + usedMemory.size() + " times");
-		logger.info("Maximum used memory: " + formatMem(maxUsed));
-		for (long m : usedMemory) {
-			logger.debug(formatMem(m));
-		}
-	}
-
-	/**
-	 * Format memory numbers. Does not work for negative numbers.
-	 *
-	 * @param m Memory in bytes.
-	 * @return Memory in readable format.
-	 */
-	private static String formatMem(long m) {
-		long b = m % 1024L;
-		m /= 1024L;
-		long kb = m % 1024L;
-		m /= 1024L;
-		long mb = m % 1024L;
-		m /= 1024L;
-		long gb = m % 1024L;
-		m /= 1024L;
-		long tb = m % 1024L;
-		m /= 1024L;
-		long pb = m;
-		StringBuilder s = new StringBuilder();
-		if (pb > 0L) {
-			s.append(pb).append(" PB ");
-		}
-		if (tb > 0L) {
-			s.append(tb).append(" TB ");
-		}
-		if (gb > 0L) {
-			s.append(gb).append(" GB ");
-		}
-		if (mb > 0L) {
-			s.append(mb).append(" MB ");
-		}
-		if (kb > 0L) {
-			s.append(kb).append(" KB ");
-		}
-		if (b > 0L) {
-			s.append(b).append(" B ");
-		}
-		return s.toString();
 	}
 
 	public static void activateStatistic() {

@@ -15,21 +15,68 @@ import org.jakstab.util.MapMap.EntryIterator;
 import java.util.*;
 import java.util.Map.Entry;
 
+/**
+ * Valuation state for interval analyses. Could work for other analyses, too.
+ *
+ * @param <T> The type of the interval.
+ */
 final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> implements AbstractState, AbstractValuationState<T> {
 
+	/**
+	 * Logger.
+	 */
 	private static final Logger logger = Logger.getLogger(GenericValuationState.class);
 
+	/**
+	 * Id of the next state.
+	 */
 	private static long maxStateId = 0L;
 
+	/**
+	 * Id of this state.
+	 */
 	final long id;
+
+	/**
+	 * Variables of this state.
+	 */
 	private final VariableValuation<T> varVal;
+
+	/**
+	 * Memory of this state.
+	 */
 	final PartitionedMemory<T> store;
-	private final AbstractDomainFactory<T> factory;
-	private final AbstractEvaluator<T> eval;
-	private final AllocationCounter allocationCounter;
+
+	/**
+	 * Variable regions for this state.
+	 */
 	private final VariableRegion varRegions;
+
+	/**
+	 * Factory for elements for this state.
+	 */
+	private final AbstractDomainFactory<T> factory;
+
+	/**
+	 * Evaluator to use with this state.
+	 */
+	private final AbstractEvaluator<T> eval;
+
+	/**
+	 * Counter for allocations for this state.
+	 */
+	private final AllocationCounter allocationCounter;
+
+	/**
+	 * If set to true, widen instead of joining.
+	 */
 	private boolean widen;
 
+	/**
+	 * Copy constructor.
+	 *
+	 * @param proto State to copy.
+	 */
 	GenericValuationState(GenericValuationState<T> proto) {
 		this(new VariableValuation<>(proto.varVal),
 			 new PartitionedMemory<>(proto.store),
@@ -39,10 +86,25 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			 proto.widen);
 	}
 
+	/**
+	 * Create a new state.
+	 *
+	 * @param factory Factory for elements of the state.
+	 */
 	GenericValuationState(AbstractDomainFactory<T> factory) {
 		this(new VariableValuation<>(factory), new PartitionedMemory<>(factory), factory, new VariableRegion(), new AllocationCounter(), false);
 	}
 
+	/**
+	 * Create a new state.
+	 *
+	 * @param varVal Variable valuation for the new state.
+	 * @param store Memory valuation for the new state.
+	 * @param factory Factory for the new state.
+	 * @param varRegions Regions for the new state.
+	 * @param allocationCounter Allocation information for the new state.
+	 * @param widen Widen flag for the new state.
+	 */
 	private GenericValuationState(VariableValuation<T> varVal,
 								  PartitionedMemory<T> store,
 								  AbstractDomainFactory<T> factory,
@@ -62,18 +124,36 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		eval = new AbstractEvaluator<>(factory, this);
 	}
 
+	/**
+	 * Advance the id for the next state.
+	 */
 	private static void incId() {
 		maxStateId++;
 	}
 
-	void activateWiden() {
+	/**
+	 * Set widen to true, thus widening instead of joining.
+	 */
+	private void activateWiden() {
 		widen = true;
 	}
 
+	/**
+	 * Evaluate an expression in this state.
+	 *
+	 * @param e The expression.
+	 * @return The value of the expression.
+	 */
 	public T abstractEval(RTLExpression e) {
 		return eval.evalExpression(e).abstractGet();
 	}
 
+	/**
+	 * Get the region of an expression.
+	 *
+	 * @param location The expression we want the region of.
+	 * @return The region of the expression.
+	 */
 	public MemoryRegion getRegion(RTLExpression location) {
 		logger.debug("Computing region for " + location);
 		MemoryRegion region = null;
@@ -86,6 +166,12 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return region == null ? MemoryRegion.GLOBAL : region;
 	}
 
+	/**
+	 * Set the value of a memory location to a value.
+	 *
+	 * @param location The location.
+	 * @param value The new value of the location.
+	 */
 	void setMemoryValue(RTLMemoryLocation location, T value) {
 		logger.debug("Setting memory location " + location + " to " + value);
 		T address = eval.evalExpression(location.getAddress()).abstractGet();
@@ -98,6 +184,13 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 	}
 
+	/**
+	 * Set the memory address of a memory region given by some domain value.
+	 *
+	 * @param address The address.
+	 * @param value The new value.
+	 * @param region The region of the address. Should not be TOP.
+	 */
 	void setMemoryValue(T address, T value, MemoryRegion region) {
 		assert !region.equals(MemoryRegion.TOP);
 		int bitWidth = value.getBitWidth();
@@ -141,6 +234,14 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 	}
 
+	/**
+	 * Set the memory value at the given offset in some region.
+	 *
+	 * @param region The region.
+	 * @param offset The offset in the region.
+	 * @param bitWidth The width in bits.
+	 * @param value The new memory value.
+	 */
 	private void setMemoryValue(MemoryRegion region, long offset, int bitWidth, T value) {
 		if (region.equals(MemoryRegion.TOP)) {
 			store.setTop(region);
@@ -149,12 +250,25 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		}
 	}
 
+	/**
+	 * Set the value of a variable.
+	 *
+	 * @param var The variable.
+	 * @param value The new value of the variable.
+	 * @param region The new region of the variable.
+	 */
 	void setVariableValue(RTLVariable var, T value, MemoryRegion region) {
 		logger.debug("Setting " + var + " to " + value + '/' + region + " in state " + id);
 		varVal.set(var, value);
 		varRegions.set(var, region);
 	}
 
+	/**
+	 * Retrieve a value stored in memory.
+	 *
+	 * @param address The memory address.
+	 * @return The value stored there.
+	 */
 	public T getMemoryValue(RTLMemoryLocation address) {
 		logger.debug("Getting memory value at " + address);
 		T addressValue = eval.evalExpression(address.getAddress()).abstractGet();
@@ -163,6 +277,14 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return getMemoryValue(addressValue, region, address.getBitWidth());
 	}
 
+	/**
+	 * Retrieve a value stored somewhere in some region.
+	 *
+	 * @param address The address of the value.
+	 * @param region The region of the value.
+	 * @param bitWidth The width in bits.
+	 * @return An approximation of the value.
+	 */
 	private T getMemoryValue(T address, MemoryRegion region, int bitWidth) {
 		if (address.isTop()) {
 			return factory.top(bitWidth).abstractGet();
@@ -182,6 +304,14 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return factory.delegateJoins(bitWidth, results);
 	}
 
+	/**
+	 * Retrieve a value in memory.
+	 *
+	 * @param region The region.
+	 * @param offset The offset in the region.
+	 * @param bitWidth The width in bits.
+	 * @return The value stored there.
+	 */
 	private T getMemoryValue(MemoryRegion region, long offset, int bitWidth) {
 		if (region.equals(MemoryRegion.TOP)) {
 			return factory.createTop(bitWidth);
@@ -189,18 +319,40 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return store.get(region, offset, bitWidth);
 	}
 
+	/**
+	 * Get the value and region of a variable.
+	 *
+	 * @param var The variable.
+	 * @return Value and region.
+	 */
 	public Pair<AbstractDomain<T>, MemoryRegion> getVariableValue(RTLVariable var) {
 		return new Pair<>(varVal.get(var).abstractBox(), varRegions.get(var));
 	}
 
+	/**
+	 * Get an iterator for all variables.
+	 *
+	 * @return The iterator.
+	 */
 	private Iterator<Entry<RTLVariable, T>> variableIterator() {
 		return varVal.iterator();
 	}
 
+	/**
+	 * Get an iterator over the memory.
+	 *
+	 * @return The iterator.
+	 */
 	private EntryIterator<MemoryRegion, Long, T> storeIterator() {
 		return store.entryIterator();
 	}
 
+	/**
+	 * Widen a state with another state.
+	 *
+	 * @param other The other state.
+	 * @return Some state larger than both inputs.
+	 */
 	GenericValuationState<T> widen(GenericValuationState<T> other) {
 		GenericValuationState<T> widenedState = new GenericValuationState<>(factory);
 		widenedState.activateWiden();
@@ -366,11 +518,24 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 		return store.equals(other.store) && varVal.equals(other.varVal) && varRegions.equals(other.varRegions);
 	}
 
+	/**
+	 * Get an identifier for an allocation at a location.
+	 *
+	 * @param loc The location of the allocation.
+	 * @return A new identifier for the allocation.
+	 */
 	int countAllocation(Location loc) {
 		return allocationCounter.countAllocation(loc);
 	}
 
+	/**
+	 * Counter class for allocations.
+	 */
 	private static final class AllocationCounter {
+
+		/**
+		 * Mapping from locations to number of allocations at that location.
+		 */
 		private final HashMap<Location, Integer> map;
 
 		@SuppressWarnings("unchecked")
@@ -386,6 +551,12 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			this(new HashMap<Location, Integer>());
 		}
 
+		/**
+		 * Count an allocation, returning the next free id at that location.
+		 *
+		 * @param loc The location of the allocation.
+		 * @return The next free id.
+		 */
 		int countAllocation(Location loc) {
 			Integer count = map.get(loc);
 			if (count == null) {
@@ -395,6 +566,12 @@ final class GenericValuationState<T extends AbstractDomain<T> & Boxable<T>> impl
 			return count;
 		}
 
+		/**
+		 * Join an allocation counter with another one.
+		 *
+		 * @param other The other counter.
+		 * @return A counter with both allocation maps combined.
+		 */
 		public AllocationCounter join(AllocationCounter other) {
 			Set<Location> keys = new FastSet<>(map.keySet());
 			keys.addAll(other.map.keySet());

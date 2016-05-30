@@ -22,6 +22,13 @@ import static org.jakstab.analysis.newIntervals.IntervalElement.interval;
 import static org.jakstab.analysis.newIntervals.utils.BitNumber.bit;
 import static org.jakstab.rtl.expressions.RTLBitRange.bitMask;
 
+/**
+ * Signedness-agnostic interval implementation with congruences. Based on the bachelor thesis
+ * "A Signedness-Agnostic Interval Domain with Congruences and an Implementation for Jakstab"
+ * by A. J. Scholl
+ *
+ * @author A. J. Scholl
+ */
 final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInterval>, Boxable<CongruenceClassInterval> {
 
 	/**
@@ -1988,6 +1995,29 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		return result;
 	}
 
+	void assertCompatible(CongruenceClassInterval t) {
+		assert bitSize == t.bitSize : "Incompatible: " + this + " and " + t;
+		assertValid();
+		t.assertValid();
+	}
+
+	private void assertValid() {
+		if (kind == CCIntervalKind.BOT || kind == CCIntervalKind.TOP) {
+			assert range == null;
+			assert modRange == null;
+			assert modulus == null;
+		} else if (kind == CCIntervalKind.ZERO) {
+			assert range != null;
+			assert modRange == null;
+			assert modulus == null;
+		} else {
+			assert kind == CCIntervalKind.MOD;
+			assert range != null;
+			assert modRange != null;
+			assert modulus != null;
+		}
+	}
+
 	@Override
 	public Pair<CongruenceClassInterval, CongruenceClassInterval> assumeULeq(CongruenceClassInterval t) {
 		assertCompatible(t);
@@ -2012,29 +2042,6 @@ final class CongruenceClassInterval implements AbstractDomain<CongruenceClassInt
 		Pair<CongruenceClassInterval, CongruenceClassInterval> result = new Pair<>(newS, newT);
 		logger.debug("assume " + this + " <= " + t + ": " + result);
 		return result;
-	}
-
-	void assertCompatible(CongruenceClassInterval t) {
-		assert bitSize == t.bitSize : "Incompatible: " + this + " and " + t;
-		assertValid();
-		t.assertValid();
-	}
-
-	private void assertValid() {
-		if (kind == CCIntervalKind.BOT || kind == CCIntervalKind.TOP) {
-			assert range == null;
-			assert modRange == null;
-			assert modulus == null;
-		} else if (kind == CCIntervalKind.ZERO) {
-			assert range != null;
-			assert modRange == null;
-			assert modulus == null;
-		} else {
-			assert kind == CCIntervalKind.MOD;
-			assert range != null;
-			assert modRange != null;
-			assert modulus != null;
-		}
 	}
 
 	@Override

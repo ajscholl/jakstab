@@ -10,6 +10,12 @@ import org.jakstab.util.Pair;
 
 import java.util.Collection;
 
+/**
+ * Interface for interval-like analyses. Should work for different domains, too, but has only been tested for intervals.
+ *
+ * @author A. J.  Scholl
+ * @param <T> The abstract domain itself.
+ */
 public interface AbstractDomain<T extends Boxable<T>> extends AbstractState, AbstractValue, BitVectorType, Iterable<BitNumber> {
 
 	/**
